@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Panel Jefe - AB SOLERTIA</title>
+<style>*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#0f172a;color:white;padding:16px}
+.card{background:white;color:#0f172a;border-radius:16px;padding:16px;margin:12px 0}
+.btn{padding:12px 18px;border:none;border-radius:10px;font-weight:800}
+table{width:100%;font-size:13px;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #e2e8f0;text-align:left}
+</style></head><body>
+<h2>Panel Admin AB SOLERTIA</h2><p style="color:#94a3b8">Acceso: CLIENTE6 / admin / admin2025</p>
+<div style="display:flex;gap:8px;margin:16px 0">
+<div style="background:#1e293b;padding:14px;border-radius:12px;flex:1;text-align:center"><b id="total">0</b><br><small>Visitas Hoy</small></div>
+<div style="background:#1e293b;padding:14px;border-radius:12px;flex:1;text-align:center"><b id="pedidos">$0</b><br><small>Pedidos</small></div>
+<div style="background:#1e293b;padding:14px;border-radius:12px;flex:1;text-align:center"><b id="cobros">$0</b><br><small>Cobros</small></div>
+</div>
+<input id="filtro" placeholder="Filtrar por empresa o vendedor (ej: CLIENTE6)" style="width:100%;padding:14px;border-radius:12px;border:none;margin-bottom:12px" oninput="render()">
+<div id="lista"></div>
+<button class="btn" style="background:#ef4444;color:white;margin-top:20px" onclick="borrarTodo()">Borrar datos demo</button>
+<script>
+let visitas=JSON.parse(localStorage.getItem('visitas')||'[]');
+// Para la versión PRO con nube, aquí conectaremos Firebase. Por ahora lee del mismo navegador para tu demo
+// TRUCO PARA TU PRUEBA DE ATERRIZAJE: Abre este admin.html EN EL MISMO CELULAR donde hiciste la visita de Pepe tienda
+function render(){
+ const f=filtro.value.toLowerCase();
+ let total=0,ped=0,cob=0;
+ lista.innerHTML='';
+ visitas.filter(v=>!f || v.empresa.toLowerCase().includes(f) || v.vendedor.toLowerCase().includes(f)).forEach(v=>{
+   total++; ped+=parseFloat(v.pedido||0); cob+=parseFloat(v.cobro||0);
+   const d=document.createElement('div'); d.className='card';
+   d.innerHTML=`<b>${v.cliente}</b> <small style="float:right">${v.hora}</small><br><small>${v.empresa} | ${v.vendedor} | GPS: ${v.lat?.toFixed(4)},${v.lng?.toFixed(4)} | Pedido $${v.pedido} | Cobro $${v.cobro}</small><br><img src="${v.foto}" style="width:100%;height:150px;object-fit:cover;border-radius:8px;margin-top:8px"><br><a target="_blank" href="https://maps.google.com/?q=${v.lat},${v.lng}" style="color:#2563eb;font-size:12px">📍 Ver en mapa</a>`;
+   lista.appendChild(d);
+ });
+ totalEl=document.getElementById('total'); totalEl.innerText=total;
+ document.getElementById('pedidos').innerText='$'+ped.toLocaleString();
+ document.getElementById('cobros').innerText='$'+cob.toLocaleString();
+}
+function borrarTodo(){ if(confirm('¿Borrar todo?')){ localStorage.removeItem('visitas'); visitas=[]; render(); } }
+render();
+</script>
+</body></html>
