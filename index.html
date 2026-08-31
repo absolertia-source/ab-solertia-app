@@ -1,74 +1,119 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AB Solertia - App Segura</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AB SOLERTIA - Rutero</title>
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiQUIgU29sZXJ0aWEifQ==">
 <style>
-:root{--azul:#0A2E6E;--dorado:#C9A86A;--gris:#f4f6f9}
-body{margin:0;font-family:Arial;background:var(--gris)}
-.login-box{max-width:400px;margin:80px auto;background:#fff;padding:30px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.1);text-align:center}
-input{width:100%;padding:14px;margin:8px 0;border:1px solid #ddd;border-radius:10px;box-sizing:border-box}
-.btn{width:100%;padding:14px;background:var(--azul);color:#fff;border:none;border-radius:10px;font-weight:bold;cursor:pointer;margin-top:10px}
-.btn-dorado{background:var(--dorado);color:var(--azul)}
-.badge{display:inline-block;padding:4px 10px;background:var(--dorado);color:var(--azul);border-radius:20px;font-size:12px;font-weight:bold}
-.app{display:none}
-.header{background:var(--azul);color:#fff;padding:15px 20px;display:flex;justify-content:space-between;align-items:center}
-.card{background:#fff;margin:15px;padding:20px;border-radius:12px}
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#0f172a;color:white}
+.login{height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:white;color:#0f172a;padding:30px;border-radius:20px;width:100%;max-width:380px}
+input{width:100%;padding:14px;margin:8px 0;border-radius:12px;border:2px solid #e2e8f0;font-size:16px}
+.btn{width:100%;padding:16px;background:#2563eb;color:white;border:none;border-radius:12px;font-weight:800;font-size:16px;margin-top:10px}
+.header{padding:16px;background:#1e293b;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10}
+.shop{background:white;color:#0f172a;margin:12px;border-radius:16px;padding:16px}
+.badge{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:800}
+.badge-ok{background:#dcfce7;color:#166534}.badge-no{background:#fee2e2;color:#991b1b}
+.camera{width:100%;height:180px;background:#f1f5f9;border:2px dashed #94a3b8;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.hidden{display:none}
 </style>
 </head>
 <body>
 
-<div id="loginView" class="login-box">
-<h2 style="color:var(--azul)">AB SOLERTIA<br><span style="color:var(--dorado)">CONTROL</span></h2>
-<p>Acceso empresarial seguro</p>
-<span class="badge">SISTEMA CON LICENCIA</span>
-<input id="empresa" placeholder="Código empresa Ej: CUCUTA01">
-<input id="usuario" placeholder="Usuario Ej: vendedor1">
-<input id="clave" type="password" placeholder="Clave">
+<div id="loginView" class="login">
+<div class="card">
+<h2 style="text-align:center">AB SOLERTIA<br><small style="color:#64748b">CONTROL DE VENDEDORES</small></h2>
+<input id="emp" placeholder="Código empresa" value="CLIENTE6">
+<input id="usr" placeholder="Usuario" value="vendedor1">
+<input id="pwd" type="password" placeholder="Clave" value="1234">
 <button class="btn" onclick="login()">ENTRAR AL SISTEMA</button>
-<p id="msg" style="color:red;font-size:13px"></p>
-<hr style="margin:20px 0">
-<p style="font-size:12px">Demo: Empresa: DEMO / Usuario: admin / Clave: 1234<br>
-Para tu cliente de 6 vendedores usa: Empresa: CLIENTE6</p>
-<button class="btn btn-dorado" onclick="window.open('https://wa.me/573132070369?text=Quiero%20activar%20mi%20licencia%20de%206%20vendedores')">¿No tienes acceso? Activa aquí</button>
+<p id="msg" style="text-align:center;margin-top:12px;font-size:13px;color:#ef4444"></p>
+<p style="text-align:center;margin-top:15px;font-size:11px;color:#94a3b8">DEMO: CLIENTE6 / vendedor1 / 1234<br>Admin: CLIENTE6 / admin / admin2025</p>
+</div>
 </div>
 
-<div id="appView" class="app">
-<div class="header"><b id="empLabel"></b><button onclick="logout()" style="background:var(--dorado);border:none;padding:6px 12px;border-radius:6px;cursor:pointer">Salir</button></div>
-<div class="card"><h3>✅ Acceso válido</h3><p>Usuario: <b id="userLabel"></b> | Empresa activa</p><p>Si dejas de pagar, este acceso se bloquea desde el panel admin.</p></div>
-<div class="card"><h3>📍 Rutero Vendedor</h3><p>Aquí va tu rutero real. Funciona offline, foto + GPS, etc.</p><button class="btn" onclick="alert('Visita guardada offline - Se sube con internet')">SIMULAR VISITA A TIENDA</button></div>
-<div class="card" id="adminPanel" style="display:none;background:#fffbe6;border:2px solid var(--dorado)"><h3>👑 Panel Admin AB Solertia</h3><p>Tú controlas licencias. Si cliente no paga, cambias estado a BLOQUEADO.</p></div>
+<div id="appView" class="hidden">
+<div class="header">
+<div><b id="vName">Vendedor</b><br><small id="vEmp" style="color:#94a3b8"></small></div>
+<div><span class="badge badge-ok" id="gpsStatus">GPS: Buscando</span><br><button onclick="logout()" style="font-size:11px;background:none;border:none;color:#94a3b8;margin-top:4px">Salir</button></div>
+</div>
+
+<div style="padding:12px">
+<button class="btn" style="background:#10b981" onclick="newVisit()">+ NUEVA VISITA</button>
+<div style="display:flex;gap:8px;margin-top:12px">
+<div style="flex:1;background:#1e293b;padding:12px;border-radius:12px;text-align:center"><b id="cHoy">0</b><br><small>Hoy</small></div>
+<div style="flex:1;background:#1e293b;padding:12px;border-radius:12px;text-align:center"><b id="cSync">0</b><br><small>Por enviar</small></div>
+</div>
+</div>
+
+<div id="list"></div>
+</div>
+
+<div id="visitView" class="hidden" style="padding:16px">
+<h3>Nueva Visita</h3>
+<input id="vCliente" placeholder="Nombre tienda / cliente">
+<input id="vPedido" type="number" placeholder="Valor pedido $">
+<input id="vCobro" type="number" placeholder="Cobro $">
+<div style="margin:12px 0">
+<label style="font-size:13px;font-weight:700">Foto del local (obligatoria)</label>
+<div class="camera" onclick="document.getElementById('fFoto').click()"><img id="preview" class="hidden" style="width:100%;height:100%;object-fit:cover"><span id="camTxt">📷 Tocar para tomar foto</span></div>
+<input id="fFoto" type="file" accept="image/*" capture="environment" class="hidden" onchange="loadFoto(event)">
+</div>
+<div style="background:#1e293b;padding:12px;border-radius:12px;margin:12px 0">
+<small>GPS: <span id="gpsTxt">Obteniendo...</span></small><br>
+<small>Hora: <span id="horaTxt"></span></small>
+</div>
+<button class="btn" style="background:#10b981" onclick="saveVisit()">GUARDAR VISITA (Funciona sin internet)</button>
+<button class="btn" style="background:#334155" onclick="closeVisit()">Cancelar</button>
 </div>
 
 <script>
-// LICENCIAS - TU CONTROL TOTAL
-const LICENCIAS = {
-  "DEMO": { activa:true, usuarios:{ "admin":"1234" } },
-  "CLIENTE6": { activa:true, usuarios:{ "vendedor1":"1234","vendedor2":"1234","vendedor3":"1234","vendedor4":"1234","vendedor5":"1234","vendedor6":"1234","admin":"admin2025" } },
-  "CUCUTA01": { activa:true, usuarios:{ "vendedor1":"1234","vendedor2":"1234" } }
-};
-
+let lat=0,lng=0,fotoBase64='',visitas=JSON.parse(localStorage.getItem('visitas')||'[]');
 function login(){
-  let emp = document.getElementById('empresa').value.toUpperCase().trim();
-  let usr = document.getElementById('usuario').value.toLowerCase().trim();
-  let cla = document.getElementById('clave').value.trim();
-  let lic = LICENCIAS[emp];
-  if(!lic){ document.getElementById('msg').innerText="Empresa no existe o no pagó licencia"; return; }
-  if(!lic.activa){ document.getElementById('msg').innerText="Licencia BLOQUEADA por falta de pago. Contacta a AB Solertia: 3132070369"; return; }
-  if(lic.usuarios[usr] && lic.usuarios[usr]==cla){
-    localStorage.setItem('ab_sesion', JSON.stringify({emp,usr}));
-    entrar(emp,usr);
-  } else { document.getElementById('msg').innerText="Usuario o clave incorrectos"; }
+const e=emp.value.toUpperCase(),u=usr.value.toLowerCase(),p=pwd.value;
+const licencias={CLIENTE6:{activa:true,vendedores:['vendedor1','vendedor2','vendedor3','vendedor4','vendedor5','vendedor6','admin']},DEMO:{activa:true,vendedores:['admin','vendedor1']}};
+if(!licencias[e]){msg.innerText='Empresa no existe';return}
+if(!licencias[e].activa){msg.innerText='LICENCIA BLOQUEADA por falta de pago. Contacta a AB Solertia: 3132070369';return}
+if(!licencias[e].vendedores.includes(u)){msg.innerText='Usuario no existe';return}
+if(p!=='1234' &&!(u==='admin'&&p==='admin2025')){msg.innerText='Clave incorrecta';return}
+localStorage.setItem('sesion',JSON.stringify({e,u})); showApp();
 }
-function entrar(emp,usr){
-  document.getElementById('loginView').style.display='none';
-  document.getElementById('appView').style.display='block';
-  document.getElementById('empLabel').innerText=emp; document.getElementById('userLabel').innerText=usr;
-  if(emp=="DEMO" || usr=="admin") document.getElementById('adminPanel').style.display='block';
+function showApp(){
+const s=JSON.parse(localStorage.getItem('sesion')); if(!s){return}
+loginView.classList.add('hidden'); appView.classList.remove('hidden'); visitView.classList.add('hidden');
+vName.innerText=s.u; vEmp.innerText=s.e; render(); getGPS();
 }
-function logout(){ localStorage.removeItem('ab_sesion'); location.reload(); }
-// Auto-login
-let ses = localStorage.getItem('ab_sesion'); if(ses){ try{ let s=JSON.parse(ses); if(LICENCIAS[s.emp]) entrar(s.emp,s.usr); }catch(e){} }
+function getGPS(){
+navigator.geolocation.getCurrentPosition(pos=>{
+lat=pos.coords.latitude; lng=pos.coords.longitude;
+gpsStatus.innerText='GPS: OK'; gpsStatus.className='badge badge-ok'; gpsTxt.innerText=lat.toFixed(5)+', '+lng.toFixed(5);
+},()=>{gpsStatus.innerText='GPS: Sin señal'; gpsStatus.className='badge badge-no'; gpsTxt.innerText='Sin señal - se guardará igual';},{enableHighAccuracy:true});
+}
+function newVisit(){ appView.classList.add('hidden'); visitView.classList.remove('hidden'); horaTxt.innerText=new Date().toLocaleString(); getGPS(); }
+function closeVisit(){ visitView.classList.add('hidden'); appView.classList.remove('hidden'); }
+function loadFoto(e){ const f=e.target.files[0]; const r=new FileReader(); r.onload=()=>{ fotoBase64=r.result; preview.src=fotoBase64; preview.classList.remove('hidden'); camTxt.classList.add('hidden')}; r.readAsDataURL(f); }
+function saveVisit(){
+if(!vCliente.value){alert('Pon nombre del cliente');return}
+if(!fotoBase64){alert('Foto obligatoria');return}
+const s=JSON.parse(localStorage.getItem('sesion'));
+visitas.unshift({id:Date.now(),cliente:vCliente.value,pedido:vPedido.value||0,cobro:vCobro.value||0,foto:fotoBase64,lat,lng,hora:new Date().toLocaleString(),vendedor:s.u,empresa:s.e,enviado:false});
+localStorage.setItem('visitas',JSON.stringify(visitas)); vCliente.value=''; vPedido.value=''; vCobro.value=''; fotoBase64=''; preview.classList.add('hidden'); camTxt.classList.remove('hidden');
+closeVisit(); render(); alert('✅ Visita guardada. Aunque no tengas internet ya quedó.');
+}
+function render(){
+list.innerHTML=''; let hoy=0;
+visitas.forEach(v=>{
+if(v.hora.includes(new Date().toLocaleDateString())) hoy++;
+const d=document.createElement('div'); d.className='shop';
+d.innerHTML=`<div style="display:flex;justify-content:space-between"><b>${v.cliente}</b><span class="badge ${v.enviado?'badge-ok':'badge-no'}">${v.enviado?'Enviado':'Por enviar'}</span></div><small>${v.hora} | ${v.vendedor} | GPS: ${v.lat.toFixed(4)}</small><br><small>Pedido: $${v.pedido} | Cobro: $${v.cobro}</small><br><img src="${v.foto}" style="width:100%;height:120px;object-fit:cover;border-radius:8px;margin-top:8px">`;
+list.appendChild(d);
+});
+cHoy.innerText=hoy; cSync.innerText=visitas.filter(v=>!v.enviado).length;
+}
+function logout(){ localStorage.removeItem('sesion'); location.reload(); }
+if(localStorage.getItem('sesion')) showApp();
+setInterval(()=>{ horaTxt.innerText=new Date().toLocaleString() },1000);
 </script>
 </body>
 </html>
