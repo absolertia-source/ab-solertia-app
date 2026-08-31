@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AB Solertia - App Segura</title>
+<style>
+:root{--azul:#0A2E6E;--dorado:#C9A86A;--gris:#f4f6f9}
+body{margin:0;font-family:Arial;background:var(--gris)}
+.login-box{max-width:400px;margin:80px auto;background:#fff;padding:30px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.1);text-align:center}
+input{width:100%;padding:14px;margin:8px 0;border:1px solid #ddd;border-radius:10px;box-sizing:border-box}
+.btn{width:100%;padding:14px;background:var(--azul);color:#fff;border:none;border-radius:10px;font-weight:bold;cursor:pointer;margin-top:10px}
+.btn-dorado{background:var(--dorado);color:var(--azul)}
+.badge{display:inline-block;padding:4px 10px;background:var(--dorado);color:var(--azul);border-radius:20px;font-size:12px;font-weight:bold}
+.app{display:none}
+.header{background:var(--azul);color:#fff;padding:15px 20px;display:flex;justify-content:space-between;align-items:center}
+.card{background:#fff;margin:15px;padding:20px;border-radius:12px}
+</style>
+</head>
+<body>
+
+<div id="loginView" class="login-box">
+<h2 style="color:var(--azul)">AB SOLERTIA<br><span style="color:var(--dorado)">CONTROL</span></h2>
+<p>Acceso empresarial seguro</p>
+<span class="badge">SISTEMA CON LICENCIA</span>
+<input id="empresa" placeholder="Código empresa Ej: CUCUTA01">
+<input id="usuario" placeholder="Usuario Ej: vendedor1">
+<input id="clave" type="password" placeholder="Clave">
+<button class="btn" onclick="login()">ENTRAR AL SISTEMA</button>
+<p id="msg" style="color:red;font-size:13px"></p>
+<hr style="margin:20px 0">
+<p style="font-size:12px">Demo: Empresa: DEMO / Usuario: admin / Clave: 1234<br>
+Para tu cliente de 6 vendedores usa: Empresa: CLIENTE6</p>
+<button class="btn btn-dorado" onclick="window.open('https://wa.me/573132070369?text=Quiero%20activar%20mi%20licencia%20de%206%20vendedores')">¿No tienes acceso? Activa aquí</button>
+</div>
+
+<div id="appView" class="app">
+<div class="header"><b id="empLabel"></b><button onclick="logout()" style="background:var(--dorado);border:none;padding:6px 12px;border-radius:6px;cursor:pointer">Salir</button></div>
+<div class="card"><h3>✅ Acceso válido</h3><p>Usuario: <b id="userLabel"></b> | Empresa activa</p><p>Si dejas de pagar, este acceso se bloquea desde el panel admin.</p></div>
+<div class="card"><h3>📍 Rutero Vendedor</h3><p>Aquí va tu rutero real. Funciona offline, foto + GPS, etc.</p><button class="btn" onclick="alert('Visita guardada offline - Se sube con internet')">SIMULAR VISITA A TIENDA</button></div>
+<div class="card" id="adminPanel" style="display:none;background:#fffbe6;border:2px solid var(--dorado)"><h3>👑 Panel Admin AB Solertia</h3><p>Tú controlas licencias. Si cliente no paga, cambias estado a BLOQUEADO.</p></div>
+</div>
+
+<script>
+// LICENCIAS - TU CONTROL TOTAL
+const LICENCIAS = {
+  "DEMO": { activa:true, usuarios:{ "admin":"1234" } },
+  "CLIENTE6": { activa:true, usuarios:{ "vendedor1":"1234","vendedor2":"1234","vendedor3":"1234","vendedor4":"1234","vendedor5":"1234","vendedor6":"1234","admin":"admin2025" } },
+  "CUCUTA01": { activa:true, usuarios:{ "vendedor1":"1234","vendedor2":"1234" } }
+};
+
+function login(){
+  let emp = document.getElementById('empresa').value.toUpperCase().trim();
+  let usr = document.getElementById('usuario').value.toLowerCase().trim();
+  let cla = document.getElementById('clave').value.trim();
+  let lic = LICENCIAS[emp];
+  if(!lic){ document.getElementById('msg').innerText="Empresa no existe o no pagó licencia"; return; }
+  if(!lic.activa){ document.getElementById('msg').innerText="Licencia BLOQUEADA por falta de pago. Contacta a AB Solertia: 3132070369"; return; }
+  if(lic.usuarios[usr] && lic.usuarios[usr]==cla){
+    localStorage.setItem('ab_sesion', JSON.stringify({emp,usr}));
+    entrar(emp,usr);
+  } else { document.getElementById('msg').innerText="Usuario o clave incorrectos"; }
+}
+function entrar(emp,usr){
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('appView').style.display='block';
+  document.getElementById('empLabel').innerText=emp; document.getElementById('userLabel').innerText=usr;
+  if(emp=="DEMO" || usr=="admin") document.getElementById('adminPanel').style.display='block';
+}
+function logout(){ localStorage.removeItem('ab_sesion'); location.reload(); }
+// Auto-login
+let ses = localStorage.getItem('ab_sesion'); if(ses){ try{ let s=JSON.parse(ses); if(LICENCIAS[s.emp]) entrar(s.emp,s.usr); }catch(e){} }
+</script>
+</body>
+</html>
