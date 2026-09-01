@@ -1,119 +1,66 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>AB SOLERTIA - Rutero</title>
-<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiQUIgU29sZXJ0aWEifQ==">
-<style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#0f172a;color:white}
-.login{height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.card{background:white;color:#0f172a;padding:30px;border-radius:20px;width:100%;max-width:380px}
-input{width:100%;padding:14px;margin:8px 0;border-radius:12px;border:2px solid #e2e8f0;font-size:16px}
-.btn{width:100%;padding:16px;background:#2563eb;color:white;border:none;border-radius:12px;font-weight:800;font-size:16px;margin-top:10px}
-.header{padding:16px;background:#1e293b;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10}
-.shop{background:white;color:#0f172a;margin:12px;border-radius:16px;padding:16px}
-.badge{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:800}
-.badge-ok{background:#dcfce7;color:#166534}.badge-no{background:#fee2e2;color:#991b1b}
-.camera{width:100%;height:180px;background:#f1f5f9;border:2px dashed #94a3b8;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden}
-.hidden{display:none}
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AB SOLERTIA - Vendedores</title>
+<style>*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#f1f5f9;padding:12px}
+.login{max-width:360px;margin:40px auto;background:white;padding:24px;border-radius:20px}
+.card{background:white;padding:14px;border-radius:16px;margin:10px 0;box-shadow:0 2px 8px #0001}
+input,select,button{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
+button{background:#0f172a;color:white;font-weight:bold;border:none}
+.top{display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:white;padding:12px;border-radius:12px}
 </style>
-</head>
-<body>
-
-<div id="loginView" class="login">
-<div class="card">
-<h2 style="text-align:center">AB SOLERTIA<br><small style="color:#64748b">CONTROL DE VENDEDORES</small></h2>
-<input id="emp" placeholder="Código empresa" value="CLIENTE6">
-<input id="usr" placeholder="Usuario" value="vendedor1">
-<input id="pwd" type="password" placeholder="Clave" value="1234">
-<button class="btn" onclick="login()">ENTRAR AL SISTEMA</button>
-<p id="msg" style="text-align:center;margin-top:12px;font-size:13px;color:#ef4444"></p>
-<p style="text-align:center;margin-top:15px;font-size:11px;color:#94a3b8">DEMO: CLIENTE6 / vendedor1 / 1234<br>Admin: CLIENTE6 / admin / admin2025</p>
-</div>
-</div>
-
-<div id="appView" class="hidden">
-<div class="header">
-<div><b id="vName">Vendedor</b><br><small id="vEmp" style="color:#94a3b8"></small></div>
-<div><span class="badge badge-ok" id="gpsStatus">GPS: Buscando</span><br><button onclick="logout()" style="font-size:11px;background:none;border:none;color:#94a3b8;margin-top:4px">Salir</button></div>
-</div>
-
-<div style="padding:12px">
-<button class="btn" style="background:#10b981" onclick="newVisit()">+ NUEVA VISITA</button>
-<div style="display:flex;gap:8px;margin-top:12px">
-<div style="flex:1;background:#1e293b;padding:12px;border-radius:12px;text-align:center"><b id="cHoy">0</b><br><small>Hoy</small></div>
-<div style="flex:1;background:#1e293b;padding:12px;border-radius:12px;text-align:center"><b id="cSync">0</b><br><small>Por enviar</small></div>
-</div>
-</div>
-
-<div id="list"></div>
-</div>
-
-<div id="visitView" class="hidden" style="padding:16px">
-<h3>Nueva Visita</h3>
-<input id="vCliente" placeholder="Nombre tienda / cliente">
-<input id="vPedido" type="number" placeholder="Valor pedido $">
-<input id="vCobro" type="number" placeholder="Cobro $">
-<div style="margin:12px 0">
-<label style="font-size:13px;font-weight:700">Foto del local (obligatoria)</label>
-<div class="camera" onclick="document.getElementById('fFoto').click()"><img id="preview" class="hidden" style="width:100%;height:100%;object-fit:cover"><span id="camTxt">📷 Tocar para tomar foto</span></div>
-<input id="fFoto" type="file" accept="image/*" capture="environment" class="hidden" onchange="loadFoto(event)">
-</div>
-<div style="background:#1e293b;padding:12px;border-radius:12px;margin:12px 0">
-<small>GPS: <span id="gpsTxt">Obteniendo...</span></small><br>
-<small>Hora: <span id="horaTxt"></span></small>
-</div>
-<button class="btn" style="background:#10b981" onclick="saveVisit()">GUARDAR VISITA (Funciona sin internet)</button>
-<button class="btn" style="background:#334155" onclick="closeVisit()">Cancelar</button>
-</div>
-
-<script>
-let lat=0,lng=0,fotoBase64='',visitas=JSON.parse(localStorage.getItem('visitas')||'[]');
-function login(){
-const e=emp.value.toUpperCase(),u=usr.value.toLowerCase(),p=pwd.value;
-const licencias={CLIENTE6:{activa:true,vendedores:['vendedor1','vendedor2','vendedor3','vendedor4','vendedor5','vendedor6','admin']},DEMO:{activa:true,vendedores:['admin','vendedor1']}};
-if(!licencias[e]){msg.innerText='Empresa no existe';return}
-if(!licencias[e].activa){msg.innerText='LICENCIA BLOQUEADA por falta de pago. Contacta a AB Solertia: 3132070369';return}
-if(!licencias[e].vendedores.includes(u)){msg.innerText='Usuario no existe';return}
-if(p!=='1234' &&!(u==='admin'&&p==='admin2025')){msg.innerText='Clave incorrecta';return}
-localStorage.setItem('sesion',JSON.stringify({e,u})); showApp();
-}
-function showApp(){
-const s=JSON.parse(localStorage.getItem('sesion')); if(!s){return}
-loginView.classList.add('hidden'); appView.classList.remove('hidden'); visitView.classList.add('hidden');
-vName.innerText=s.u; vEmp.innerText=s.e; render(); getGPS();
-}
-function getGPS(){
-navigator.geolocation.getCurrentPosition(pos=>{
-lat=pos.coords.latitude; lng=pos.coords.longitude;
-gpsStatus.innerText='GPS: OK'; gpsStatus.className='badge badge-ok'; gpsTxt.innerText=lat.toFixed(5)+', '+lng.toFixed(5);
-},()=>{gpsStatus.innerText='GPS: Sin señal'; gpsStatus.className='badge badge-no'; gpsTxt.innerText='Sin señal - se guardará igual';},{enableHighAccuracy:true});
-}
-function newVisit(){ appView.classList.add('hidden'); visitView.classList.remove('hidden'); horaTxt.innerText=new Date().toLocaleString(); getGPS(); }
-function closeVisit(){ visitView.classList.add('hidden'); appView.classList.remove('hidden'); }
-function loadFoto(e){ const f=e.target.files[0]; const r=new FileReader(); r.onload=()=>{ fotoBase64=r.result; preview.src=fotoBase64; preview.classList.remove('hidden'); camTxt.classList.add('hidden')}; r.readAsDataURL(f); }
-function saveVisit(){
-if(!vCliente.value){alert('Pon nombre del cliente');return}
-if(!fotoBase64){alert('Foto obligatoria');return}
-const s=JSON.parse(localStorage.getItem('sesion'));
-visitas.unshift({id:Date.now(),cliente:vCliente.value,pedido:vPedido.value||0,cobro:vCobro.value||0,foto:fotoBase64,lat,lng,hora:new Date().toLocaleString(),vendedor:s.u,empresa:s.e,enviado:false});
-localStorage.setItem('visitas',JSON.stringify(visitas)); vCliente.value=''; vPedido.value=''; vCobro.value=''; fotoBase64=''; preview.classList.add('hidden'); camTxt.classList.remove('hidden');
-closeVisit(); render(); alert('✅ Visita guardada. Aunque no tengas internet ya quedó.');
-}
-function render(){
-list.innerHTML=''; let hoy=0;
-visitas.forEach(v=>{
-if(v.hora.includes(new Date().toLocaleDateString())) hoy++;
-const d=document.createElement('div'); d.className='shop';
-d.innerHTML=`<div style="display:flex;justify-content:space-between"><b>${v.cliente}</b><span class="badge ${v.enviado?'badge-ok':'badge-no'}">${v.enviado?'Enviado':'Por enviar'}</span></div><small>${v.hora} | ${v.vendedor} | GPS: ${v.lat.toFixed(4)}</small><br><small>Pedido: $${v.pedido} | Cobro: $${v.cobro}</small><br><img src="${v.foto}" style="width:100%;height:120px;object-fit:cover;border-radius:8px;margin-top:8px">`;
-list.appendChild(d);
-});
-cHoy.innerText=hoy; cSync.innerText=visitas.filter(v=>!v.enviado).length;
-}
-function logout(){ localStorage.removeItem('sesion'); location.reload(); }
-if(localStorage.getItem('sesion')) showApp();
-setInterval(()=>{ horaTxt.innerText=new Date().toLocaleString() },1000);
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWWN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
+const app = initializeApp(firebaseConfig); window.db=getFirestore(app); window.addDoc=addDoc; window.collection=collection; window.serverTimestamp=serverTimestamp;
 </script>
-</body>
-</html>
+</head><body>
+<div id="login" class="login">
+<h2>AB SOLERTIA</h2><small>Acceso Vendedores Cúcuta</small><br><br>
+<input id="emp" placeholder="Empresa: CLIENTE6">
+<input id="vend" placeholder="Vendedor: vendedor1">
+<input id="pass" type="password" placeholder="Clave: 1234">
+<button onclick="entrar()">Entrar</button>
+<p id="err" style="color:red"></p>
+</div>
+<div id="app" style="display:none">
+<div class="top"><b id="info"></b><button onclick="salir()" style="width:auto;padding:6px 12px">Salir</button></div>
+<button onclick="nueva()" style="margin-top:12px">+ Nueva Visita</button>
+<div id="lista"></div>
+</div>
+<div id="formVis" style="display:none;position:fixed;inset:0;background:#0008;padding:12px;overflow:auto"><div class="card" style="max-width:500px;margin:20px auto">
+<h3>Nueva Visita</h3>
+<input id="cli" placeholder="Nombre Cliente / Tienda">
+<input id="ped" type="number" placeholder="Valor Pedido $">
+<input id="cob" type="number" placeholder="Valor Cobro $">
+<input id="fotoFile" type="file" accept="image/*" capture="environment">
+<button onclick="guardar()">Guardar en la Nube</button>
+<button onclick="document.getElementById('formVis').style.display='none'" style="background:#e2e8f0;color:#0f172a">Cancelar</button>
+</div></div>
+<script>
+let empresa='',vendedor='',fotoBase='';
+document.getElementById('fotoFile')?.addEventListener('change',e=>{
+ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>fotoBase=r.result; r.readAsDataURL(f);
+});
+function entrar(){
+ empresa=document.getElementById('emp').value.trim().toUpperCase(); vendedor=document.getElementById('vend').value.trim(); const p=document.getElementById('pass').value.trim();
+ if(empresa=='CLIENTE6'&&vendedor=='vendedor1'&&p=='1234'){localStorage.setItem('ab_emp',empresa);localStorage.setItem('ab_vend',vendedor);mostrarApp();}
+ else document.getElementById('err').innerText='Datos incorrectos. Usa CLIENTE6 / vendedor1 / 1234';
+}
+function mostrarApp(){
+ document.getElementById('login').style.display='none'; document.getElementById('app').style.display='block';
+ document.getElementById('info').innerText=localStorage.getItem('ab_emp')+' | '+localStorage.getItem('ab_vend');
+}
+function salir(){localStorage.clear();location.reload();}
+function nueva(){document.getElementById('formVis').style.display='block';}
+async function guardar(){
+ const cli=document.getElementById('cli').value; const ped=document.getElementById('ped').value||0; const cob=document.getElementById('cob').value||0;
+ if(!cli){alert('Pon nombre cliente');return;}
+ navigator.geolocation.getCurrentPosition(async pos=>{
+  try{
+   await addDoc(collection(db,"visitas"),{empresa:localStorage.getItem('ab_emp'),vendedor:localStorage.getItem('ab_vend'),cliente:cli,pedido:ped,cobro:cob,foto:fotoBase||'',lat:pos.coords.latitude,lng:pos.coords.longitude,hora:new Date().toLocaleString(),creado:serverTimestamp()});
+   alert('¡Guardado en Firebase! Ya lo ve el jefe en admin.html'); document.getElementById('formVis').style.display='none'; document.getElementById('cli').value=''; document.getElementById('ped').value=''; document.getElementById('cob').value='';
+  }catch(e){alert('Error: '+e.message+' - Revisa Reglas en Firestore en modo prueba');}
+ },()=>{alert('Activa GPS para guardar ubicación');},{enableHighAccuracy:true});
+}
+if(localStorage.getItem('ab_emp')) mostrarApp();
+</script></body></html>
