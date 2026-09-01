@@ -1,35 +1,80 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Panel Jefe - AB SOLERTIA</title>
-<style>*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#0f172a;color:white;padding:16px}
-.card{background:white;color:#0f172a;border-radius:16px;padding:14px;margin:10px 0} .kpi{display:flex;gap:8px}
-.kpi div{background:#1e293b;padding:14px;border-radius:12px;flex:1;text-align:center}
-input{width:100%;padding:14px;border-radius:12px;border:none;margin:12px 0}
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Panel Jefe - AB SOLERTIA</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
+body{background:#f1f5f9;padding:12px}
+.top{background:#0f172a;color:white;padding:16px;border-radius:16px;display:flex;justify-content:space-between;align-items:center}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0}
+.stat{background:white;padding:14px;border-radius:14px;text-align:center;box-shadow:0 2px 8px #0001}
+.stat b{font-size:22px;display:block}
+.rank{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0}
+.vend-card{background:white;border-radius:14px;padding:12px;box-shadow:0 2px 8px #0001;border-left:5px solid #0f172a}
+.vend-card b{font-size:15px}
+.vend-card small{color:#64748b}
+.visita{background:white;padding:12px;border-radius:14px;margin:8px 0;display:flex;gap:10px;box-shadow:0 1px 4px #0001}
+.visita img{width:70px;height:70px;object-fit:cover;border-radius:10px}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWWN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
 const app = initializeApp(firebaseConfig); const db = getFirestore(app);
-let all=[];
-const q = query(collection(db,"visitas"), orderBy("creado","desc"));
-onSnapshot(q, (snap)=>{
- all=[]; let tot=0,ped=0,cob=0;
- snap.forEach(doc=>{const d=doc.data(); all.push(d); tot++; ped+=parseFloat(d.pedido||0); cob+=parseFloat(d.cobro||0);});
- document.getElementById('total').innerText=tot; document.getElementById('pedidos').innerText='$'+ped.toLocaleString(); document.getElementById('cobros').innerText='$'+cob.toLocaleString();
- render();
-});
-window.render=()=>{
- const f=document.getElementById('filtro').value.toLowerCase();
- const cont=document.getElementById('lista'); cont.innerHTML='';
- all.filter(v=>!f || v.cliente.toLowerCase().includes(f) || v.empresa.toLowerCase().includes(f) || v.vendedor.toLowerCase().includes(f)).forEach(v=>{
-   const el=document.createElement('div'); el.className='card';
-   el.innerHTML=`<b>${v.cliente}</b> <small style="float:right">${v.hora||''}</small><br><small>${v.empresa} | ${v.vendedor} | Ped: $${v.pedido||0} | Cob: $${v.cobro||0}</small><br><img src="${v.foto}" style="width:100%;height:160px;object-fit:cover;border-radius:10px;margin-top:8px"><br><a target="_blank" href="https://maps.google.com/?q=${v.lat},${v.lng}" style="color:#2563eb">📍 ${v.lat?.toFixed(4)},${v.lng?.toFixed(4)} - Ver mapa</a>`;
-   cont.appendChild(el);
+
+async function cargar(){
+ const q = query(collection(db,"visitas"));
+ const snap = await getDocs(q);
+ let totalVis=0, totalPed=0, totalCob=0;
+ let porVendedor = {};
+
+ let htmlVisitas='';
+ snap.forEach(doc=>{
+   const d=doc.data(); totalVis++; totalPed+=Number(d.pedido||0); totalCob+=Number(d.cobro||0);
+   const vend = (d.vendedor||'sin-vendedor').toLowerCase();
+   if(!porVendedor[vend]) porVendedor[vend]={visitas:0, pedidos:0, cobros:0};
+   porVendedor[vend].visitas++; porVendedor[vend].pedidos+=Number(d.pedido||0); porVendedor[vend].cobros+=Number(d.cobro||0);
+
+   htmlVisitas += `<div class="visita">
+     <img src="${d.foto||''}">
+     <div>
+       <b>${d.cliente||''}</b> - <span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br>
+       <small>Ped: $${Number(d.pedido||0).toLocaleString()} | Cob: $${Number(d.cobro||0).toLocaleString()} | ${d.hora||''}</small><br>
+       <a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Ver mapa</a>
+     </div>
+   </div>`;
  });
+
+ // Totales generales
+ document.getElementById('totalVis').innerText=totalVis;
+ document.getElementById('totalPed').innerText='$'+totalPed.toLocaleString();
+ document.getElementById('totalCob').innerText='$'+totalCob.toLocaleString();
+
+ // Ranking por vendedor
+ let htmlRank='';
+ Object.keys(porVendedor).sort().forEach(v=>{
+   const r=porVendedor[v];
+   htmlRank+=`<div class="vend-card">
+     <b>👤 ${v}</b><br>
+     <small>${r.visitas} visitas</small><br>
+     <div style="margin-top:6px"><b style="color:#16a34a">$${r.pedidos.toLocaleString()}</b> <small>Pedidos</small></div>
+     <div><b style="color:#2563eb">$${r.cobros.toLocaleString()}</b> <small>Cobros</small></div>
+   </div>`;
+ });
+ document.getElementById('ranking').innerHTML = htmlRank || 'Aún no hay visitas';
+ document.getElementById('lista').innerHTML = htmlVisitas;
 }
+window.onload=cargar;
 </script></head><body>
-<h2>🔒 Panel Admin AB SOLERTIA</h2><p style="color:#94a3b8">En vivo desde Cúcuta - Firebase conectado</p>
-<div class="kpi" style="margin-top:16px"><div><b id="total">0</b><br><small>Visitas</small></div><div><b id="pedidos">$0</b><br><small>Pedidos</small></div><div><b id="cobros">$0</b><br><small>Cobros</small></div></div>
-<input id="filtro" placeholder="Filtrar: CLIENTE6, Pepe, vendedor1..." oninput="render()">
-<div id="lista"><p style="text-align:center;color:#94a3b8;margin-top:30px">Esperando visitas de vendedores...</p></div>
+<div class="top"><h3>AB SOLERTIA - Panel Jefe</h3><button onclick="location.reload()" style="width:auto;padding:6px 12px;border-radius:8px;border:none">↻ Actualizar</button></div>
+
+<div class="stats">
+  <div class="stat"><b id="totalVis">0</b><small>Visitas Totales</small></div>
+  <div class="stat"><b id="totalPed">$0</b><small>Pedidos Totales</small></div>
+  <div class="stat"><b id="totalCob">$0</b><small>Cobros Totales</small></div>
+</div>
+
+<h4 style="margin:10px 4px">🏆 Ranking por Vendedor</h4>
+<div id="ranking" class="rank"></div>
+
+<h4 style="margin:18px 4px 8px">📋 Últimas Visitas</h4>
+<div id="lista"></div>
+
 </body></html>
