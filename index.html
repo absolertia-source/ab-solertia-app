@@ -23,7 +23,22 @@ document.getElementById('fotoFile').addEventListener('change',e=>{
  };
  img.src=URL.createObjectURL(file);
 });
-function entrar(){const em=document.getElementById('emp').value.trim().toUpperCase(), ve=document.getElementById('vend').value.trim(), p=document.getElementById('pass').value.trim(); if(em=='CLIENTE6'&&ve=='vendedor1'&&p=='1234' || (ve.startsWith('vendedor')&&p=='1234')){localStorage.setItem('ab_emp',em||'CLIENTE6');localStorage.setItem('ab_vend',ve);mostrarApp();} else document.getElementById('err').innerText='Datos incorrectos';}
+function entrar(){
+  const em=document.getElementById('emp').value.trim().toUpperCase(); 
+  const ve=document.getElementById('vend').value.trim().toLowerCase(); 
+  const p=document.getElementById('pass').value.trim();
+  
+  // Acepta vendedor1 al vendedor6 con clave 1234
+  const vendedoresValidos = ['vendedor1','vendedor2','vendedor3','vendedor4','vendedor5','vendedor6'];
+  
+  if( (em=='CLIENTE6' || em=='') && vendedoresValidos.includes(ve) && p=='1234' ){
+    localStorage.setItem('ab_emp','CLIENTE6');
+    localStorage.setItem('ab_vend',ve);
+    mostrarApp();
+  } else {
+    document.getElementById('err').innerText='Empresa: CLIENTE6 | Vendedor: vendedor1 al 6 | Clave: 1234';
+  }
+}
 function mostrarApp(){document.getElementById('login').style.display='none'; document.getElementById('app').style.display='block'; document.getElementById('info').innerText=localStorage.getItem('ab_emp')+' | '+localStorage.getItem('ab_vend');}
 function salir(){localStorage.clear();location.reload();}
 function nueva(){document.getElementById('formVis').style.display='block'; document.getElementById('gpsStat').innerText='📡 Buscando GPS...'; if(navigator.geolocation){navigator.geolocation.getCurrentPosition(pos=>{lat=pos.coords.latitude; lng=pos.coords.longitude; document.getElementById('gpsStat').innerText='✅ GPS OK: '+lat.toFixed(5)+','+lng.toFixed(5);},err=>{document.getElementById('gpsStat').innerText='⚠️ GPS: '+lat.toFixed(4)+','+lng.toFixed(4);},{enableHighAccuracy:true,timeout:8000});}}
