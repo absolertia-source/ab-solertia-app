@@ -1,3 +1,33 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AB Solertia | Trazabilidad Comercial en Tiempo Real</title>
+<meta name="description" content="Sistema de registro y georreferenciación de gestión comercial en campo.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ab-solertia-app.vercel.app">
+<meta property="og:title" content="AB Solertia | Trazabilidad Comercial en Tiempo Real">
+<meta property="og:description" content="Cada gestión comercial queda registrada con GPS, foto y hora exacta.">
+<meta property="og:image" content="URL_DE_TU_IMAGEN_1200x630.jpg">
+<meta property="og:locale" content="es_CO">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="AB Solertia | Trazabilidad Comercial en Tiempo Real">
+<meta name="twitter:description" content="Cada gestión comercial queda registrada con GPS, foto y hora exacta.">
+<meta name="twitter:image" content="URL_DE_TU_IMAGEN_1200x630.jpg">
+<style>*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#f1f5f9;padding:12px}.login{max-width:360px;margin:40px auto;background:white;padding:24px;border-radius:20px}.card{background:white;padding:14px;border-radius:16px;margin:10px 0}input,button{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}button{background:#0f172a;color:white;font-weight:bold;border:none}.top{display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:white;padding:12px;border-radius:12px}#gpsStat{font-size:12px;padding:10px;background:#fef3c7;border-radius:8px;margin:8px 0}</style>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWWN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+window.guardarFirebase = async (d) => { return await addDoc(collection(db,"visitas"), {...d, creado: serverTimestamp()}); }
+window.loginFirebase = async (email, pass) => { return await signInWithEmailAndPassword(auth, email, pass); }
+window.logoutFirebase = async () => { return await signOut(auth); }
+</script></head><body>
+<div id="login" class="login"><h2>AB SOLERTIA</h2><small>Vendedores Cúcuta</small><br><br><input id="emp" placeholder="Correo"><input id="pass" type="password" placeholder="Contraseña"><button onclick="entrar()">Entrar</button><p id="err" style="color:red"></p></div>
+<div id="app" style="display:none"><div class="top"><b id="info"></b><button onclick="salir()" style="width:auto;padding:6px 12px">Salir</button></div><button onclick="nueva()" style="margin-top:12px">+ Nueva Visita</button><div id="lista"></div></div>
 <div id="formVis" style="display:none;position:fixed;inset:0;background:#0008;padding:12px;overflow:auto"><div class="card" style="max-width:500px;margin:20px auto"><h3>Nueva Visita</h3><div id="gpsStat">📡 Esperando GPS...</div><input id="cli" placeholder="Nombre Cliente / Tienda"><input id="ped" type="number" placeholder="Valor Pedido $"><input id="cob" type="number" placeholder="Valor Cobro $"><p style="font-size:12px;margin-top:8px">📸 Foto (se comprime sola):</p><input id="fotoFile" type="file" accept="image/*" capture="environment"><div id="infoFoto" style="font-size:11px;color:green"></div><img id="prevFoto" style="width:100%;display:none;border-radius:10px;margin-top:8px"><button onclick="guardar()">Guardar en la Nube</button><button onclick="document.getElementById('formVis').style.display='none'" style="background:#e2e8f0;color:#0f172a">Cancelar</button></div></div>
 <script>
 let fotoBase='',lat=7.8897,lng=-72.4967;
