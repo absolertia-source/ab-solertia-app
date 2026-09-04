@@ -43,6 +43,7 @@ window.entrarAdmin = async () => {
 }
 
 async function cargar(){
+ const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
  const snap = await getDocs(query(collection(db,"visitas")));
  let totalVis=0, totalPed=0, totalCob=0;
  let porVendedor = {}; datosGlobal=[];
