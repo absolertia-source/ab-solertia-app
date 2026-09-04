@@ -14,13 +14,33 @@ body{background:#f1f5f9;padding:12px}
 .vend-card{background:white;border-radius:14px;padding:12px;box-shadow:0 2px 8px #0001;border-left:5px solid #0f172a}
 .visita{background:white;padding:12px;border-radius:14px;margin:8px 0;display:flex;gap:10px;box-shadow:0 1px 4px #0001}
 .visita img{width:70px;height:70px;object-fit:cover;border-radius:10px}
+.login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px}
+.login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
+.login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, getDocs, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
-const app = initializeApp(firebaseConfig); const db = getFirestore(app);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
 let datosGlobal=[];
+
+window.entrarAdmin = async () => {
+  const email = document.getElementById('adminEmail').value.trim();
+  const pass = document.getElementById('adminPass').value.trim();
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+    document.getElementById('loginAdmin').style.display='none';
+    document.getElementById('panel').style.display='block';
+    cargar();
+  } catch(e) {
+    document.getElementById('adminErr').innerText='Error: '+e.code;
+  }
+}
 
 async function cargar(){
  const snap = await getDocs(query(collection(db,"visitas")));
@@ -65,8 +85,15 @@ window.descargarExcel=()=>{
   XLSX.utils.book_append_sheet(wb, ws, "Visitas");
   XLSX.writeFile(wb, `AB_SOLERTIA_${new Date().toLocaleDateString()}.xlsx`);
 }
-window.onload=cargar;
 </script></head><body>
+<div id="loginAdmin" class="login">
+  <h2>AB SOLERTIA</h2><small>Panel Jefe</small><br><br>
+  <input id="adminEmail" placeholder="Correo">
+  <input id="adminPass" type="password" placeholder="Contraseña">
+  <button onclick="entrarAdmin()">Entrar</button>
+  <p id="adminErr" style="color:red"></p>
+</div>
+<div id="panel" style="display:none">
 <div class="top">
   <h3>AB SOLERTIA - Panel Jefe</h3>
   <div style="display:flex;gap:8px">
@@ -83,4 +110,5 @@ window.onload=cargar;
 <div id="ranking" class="rank"></div>
 <h4 style="margin:18px 4px 8px">📋 Últimas Visitas</h4>
 <div id="lista"></div>
+</div>
 </body></html>
