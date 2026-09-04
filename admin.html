@@ -48,8 +48,10 @@ async function cargar(){
  let totalVis=0, totalPed=0, totalCob=0;
  let porVendedor = {}; datosGlobal=[];
  let htmlVisitas='';
- snap.forEach(doc=>{
-   const d=doc.data(); datosGlobal.push(d);
+snap.forEach(doc=>{
+   const d=doc.data();
+   if(!d.creado || d.creado.toDate() < inicioHoy) return;
+   datosGlobal.push(d);
    totalVis++; totalPed+=Number(d.pedido||0); totalCob+=Number(d.cobro||0);
    const vend=(d.vendedor||'sin-vendedor').toLowerCase();
    if(!porVendedor[vend]) porVendedor[vend]={visitas:0,pedidos:0,cobros:0};
