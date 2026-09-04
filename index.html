@@ -57,9 +57,9 @@ async function entrar(){
     await window.loginFirebase(email, p);
     localStorage.setItem('ab_vend', email);
     mostrarApp();
-  } catch(e)
+  } } catch(e){
     document.getElementById('err').innerText='Error: '+e.code;
-
+  }
   }
 }
 function mostrarApp(){document.getElementById('login').style.display='none'; document.getElementById('app').style.display='block'; document.getElementById('info').innerText=localStorage.getItem('ab_vend');}
