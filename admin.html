@@ -1,4 +1,4 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Panel Jefe - AB SOLERTIA</title>
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Panel Jefe - TrazaGO</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
@@ -17,29 +17,86 @@ body{background:#f1f5f9;padding:12px}
 .login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px}
 .login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
 .login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px}
+.card{background:white;padding:14px;border-radius:16px;margin:14px 0}
+.card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
+.card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px}
+.vendedor-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, getDocs, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, getDocs, query, where, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+
+const secondaryApp = initializeApp(firebaseConfig, "Secondary");
+const secondaryAuth = getAuth(secondaryApp);
+
 let datosGlobal=[];
+let miEmpresaId = null;
 
 window.entrarAdmin = async () => {
   const email = document.getElementById('adminEmail').value.trim();
   const pass = document.getElementById('adminPass').value.trim();
+  const err = document.getElementById('adminErr');
+  err.innerText = '';
   try {
-    await signInWithEmailAndPassword(auth, email, pass);
+    const cred = await signInWithEmailAndPassword(auth, email, pass);
+
+    const usuarioSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
+    if(!usuarioSnap.exists() || usuarioSnap.data().rol !== "admin"){
+      err.innerText = 'Esta cuenta no tiene permisos de administrador';
+      await signOut(auth);
+      return;
+    }
+
+    miEmpresaId = usuarioSnap.data().empresa_id;
+    document.getElementById('nombreEmpresaTop').innerText = usuarioSnap.data().empresa_nombre || '';
     document.getElementById('loginAdmin').style.display='none';
     document.getElementById('panel').style.display='block';
     cargar();
+    cargarVendedores();
   } catch(e) {
-    document.getElementById('adminErr').innerText='Error: '+e.code;
+    err.innerText='Error: '+e.code;
   }
+}
+
+window.invitarVendedor = async () => {
+  const email = document.getElementById('vendEmail').value.trim();
+  const pass = document.getElementById('vendPass').value.trim();
+  const msg = document.getElementById('vendMsg');
+  msg.style.color = 'red';
+  msg.innerText = '';
+
+  if(!email || !pass){ msg.innerText='Completa correo y clave'; return; }
+  if(pass.length < 6){ msg.innerText='La clave debe tener al menos 6 caracteres'; return; }
+
+  try {
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, pass);
+    await setDoc(doc(db, "usuarios", cred.user.uid), {
+      email: email,
+      empresa_id: miEmpresaId,
+      rol: "vendedor"
+    });
+    await signOut(secondaryAuth);
+    msg.style.color = 'green';
+    msg.innerText = '✅ Vendedor creado: ' + email;
+    document.getElementById('vendEmail').value = '';
+    document.getElementById('vendPass').value = '';
+    cargarVendedores();
+  } catch(e) {
+    msg.innerText = 'Error: ' + e.code;
+  }
+}
+
+async function cargarVendedores(){
+  const snap = await getDocs(query(collection(db,"usuarios"), where("empresa_id","==",miEmpresaId), where("rol","==","vendedor")));
+  let html = '';
+  snap.forEach(d=>{ html += `<div class="vendedor-item"><span>👤 ${d.data().email}</span></div>`; });
+  document.getElementById('listaVendedores').innerHTML = html || '<small>Aún no has invitado vendedores</small>';
 }
 
 async function cargar(){
@@ -86,11 +143,11 @@ window.descargarExcel=()=>{
   const ws = XLSX.utils.json_to_sheet(datosExcel);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Visitas");
-  XLSX.writeFile(wb, `AB_SOLERTIA_${new Date().toLocaleDateString()}.xlsx`);
+  XLSX.writeFile(wb, `TrazaGO_${new Date().toLocaleDateString()}.xlsx`);
 }
 </script></head><body>
 <div id="loginAdmin" class="login">
-  <h2>AB SOLERTIA</h2><small>Panel Jefe</small><br><br>
+  <h2>TrazaGO</h2><small>Panel Jefe</small><br><br>
   <input id="adminEmail" placeholder="Correo">
   <input id="adminPass" type="password" placeholder="Contraseña">
   <button onclick="entrarAdmin()">Entrar</button>
@@ -98,7 +155,7 @@ window.descargarExcel=()=>{
 </div>
 <div id="panel" style="display:none">
 <div class="top">
- <h3>AB SOLERTIA - Panel Jefe (Hoy)</h3>
+ <h3>TrazaGO - Panel Jefe <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3>
   <div style="display:flex;gap:8px">
     <button class="btn btn-green" onclick="descargarExcel()">📊 Descargar Excel</button>
     <button class="btn btn-white" onclick="cargar()">↻ Actualizar</button>
@@ -109,6 +166,16 @@ window.descargarExcel=()=>{
   <div class="stat"><b id="totalPed">$0</b><small>Pedidos Totales</small></div>
   <div class="stat"><b id="totalCob">$0</b><small>Cobros Totales</small></div>
 </div>
+
+<div class="card">
+  <h4>➕ Invitar vendedor</h4>
+  <input id="vendEmail" placeholder="Correo del vendedor">
+  <input id="vendPass" type="password" placeholder="Contraseña para el vendedor (mín. 6 caracteres)">
+  <button onclick="invitarVendedor()">Crear vendedor</button>
+  <p id="vendMsg" style="font-size:13px;margin-top:4px"></p>
+  <div id="listaVendedores" style="margin-top:10px"></div>
+</div>
+
 <h4 style="margin:10px 4px">🏆 Ranking por Vendedor</h4>
 <div id="ranking" class="rank"></div>
 <h4 style="margin:18px 4px 8px">📋 Últimas Visitas</h4>
