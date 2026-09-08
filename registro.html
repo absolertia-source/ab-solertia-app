@@ -1,0 +1,66 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TrazaGO | Registra tu empresa</title>
+<style>*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#f1f5f9;padding:12px}.login{max-width:360px;margin:40px auto;background:white;padding:24px;border-radius:20px}input,button{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}button{background:#0f172a;color:white;font-weight:bold;border:none}</style>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+window.registrar = async () => {
+  const nombreEmpresa = document.getElementById('nombreEmpresa').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const pass = document.getElementById('pass').value.trim();
+  const err = document.getElementById('err');
+  err.innerText = '';
+
+  if(!nombreEmpresa || !email || !pass){
+    err.innerText = 'Completa todos los campos';
+    return;
+  }
+
+  try {
+    // 1. Crear la cuenta del dueño
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+
+    // 2. Crear la empresa nueva
+    const empresaRef = await addDoc(collection(db, "empresas"), {
+      nombre: nombreEmpresa,
+      creada: serverTimestamp()
+    });
+
+    // 3. Vincular al dueño con su empresa, como administrador
+    await setDoc(doc(db, "usuarios", cred.user.uid), {
+      email: email,
+      empresa_id: empresaRef.id,
+      empresa_nombre: nombreEmpresa,
+      rol: "admin"
+    });
+
+    document.getElementById('formRegistro').style.display = 'none';
+    document.getElementById('exito').style.display = 'block';
+  } catch(e) {
+    err.innerText = 'Error: ' + e.code;
+  }
+}
+</script></head><body>
+<div class="login">
+  <h2>TrazaGO</h2>
+  <small>Registra tu empresa</small><br><br>
+  <div id="formRegistro">
+    <input id="nombreEmpresa" placeholder="Nombre de tu empresa">
+    <input id="email" placeholder="Tu correo">
+    <input id="pass" type="password" placeholder="Crea una contraseña">
+    <button onclick="registrar()">Crear mi cuenta</button>
+    <p id="err" style="color:red"></p>
+  </div>
+  <div id="exito" style="display:none">
+    <p>✅ ¡Listo! Tu empresa quedó registrada.</p>
+    <p style="margin-top:10px;font-size:14px">Ya puedes entrar al Panel Jefe con tu correo y contraseña.</p>
+  </div>
+</div>
+</body></html>
