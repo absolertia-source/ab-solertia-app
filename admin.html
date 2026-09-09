@@ -102,7 +102,7 @@ async function cargarVendedores(){
 
 async function cargar(){
  const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
- const snap = await getDocs(query(collection(db,"visitas")));
+ const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId)));
  let totalVis=0, totalPed=0, totalCob=0;
  let porVendedor = {}; datosGlobal=[];
  let htmlVisitas='';
