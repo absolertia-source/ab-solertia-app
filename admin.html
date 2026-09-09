@@ -55,6 +55,14 @@ window.entrarAdmin = async () => {
     }
 
     miEmpresaId = usuarioSnap.data().empresa_id;
+
+    const empresaSnap = await getDoc(doc(db, "empresas", miEmpresaId));
+    if(empresaSnap.exists() && empresaSnap.data().activa === false){
+      err.innerText = 'Tu empresa fue suspendida. Contacta al proveedor.';
+      await signOut(auth);
+      return;
+    }
+
     document.getElementById('nombreEmpresaTop').innerText = usuarioSnap.data().empresa_nombre || '';
     document.getElementById('loginAdmin').style.display='none';
     document.getElementById('panel').style.display='block';
