@@ -28,6 +28,7 @@ window.guardarFirebase = async (d) => { return await addDoc(collection(db,"visit
 window.loginFirebase = async (email, pass) => { return await signInWithEmailAndPassword(auth, email, pass); }
 window.logoutFirebase = async () => { return await signOut(auth); }
 window.getUsuarioDoc = async (uid) => { return await getDoc(doc(db, "usuarios", uid)); }
+window.getEmpresaDoc = async (empresaId) => { return await getDoc(doc(db, "empresas", empresaId)); }
 </script></head><body>
 <div id="login" class="login"><h2>TrazaGO</h2><small>Vendedores</small><br><br><input id="emp" placeholder="Correo"><input id="pass" type="password" placeholder="Contraseña"><button onclick="entrar()">Entrar</button><p id="err" style="color:red"></p></div>
 <div id="app" style="display:none"><div class="top"><b id="info"></b><button onclick="salir()" style="width:auto;padding:6px 12px">Salir</button></div><button onclick="nueva()" style="margin-top:12px">+ Nueva Visita</button><div id="lista"></div></div>
@@ -61,6 +62,14 @@ async function entrar(){
       return;
     }
     miEmpresaId = usuarioSnap.data().empresa_id;
+
+    const empresaSnap = await window.getEmpresaDoc(miEmpresaId);
+    if(empresaSnap.exists() && empresaSnap.data().activa === false){
+      err.innerText='Tu empresa fue suspendida. Contacta al proveedor.';
+      await window.logoutFirebase();
+      return;
+    }
+
     localStorage.setItem('ab_vend', email);
     localStorage.setItem('ab_empresa', miEmpresaId);
     mostrarApp();
