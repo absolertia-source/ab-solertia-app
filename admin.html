@@ -25,7 +25,7 @@ body{background:#f1f5f9;padding:12px}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, getDocs, query, where, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, setPersistence, inMemoryPersistence, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
 const app = initializeApp(firebaseConfig);
@@ -38,6 +38,20 @@ await setPersistence(secondaryAuth, inMemoryPersistence);
 
 let datosGlobal=[];
 let miEmpresaId = null;
+
+window.olvideAdmin = async () => {
+  const email = document.getElementById('adminEmail').value.trim();
+  const err = document.getElementById('adminErr');
+  if(!email){ err.style.color='red'; err.innerText='Escribe tu correo arriba primero'; return; }
+  try{
+    await sendPasswordResetEmail(auth, email);
+    err.style.color='green';
+    err.innerText='✅ Te enviamos un correo para restablecer tu clave. Revisa también spam.';
+  }catch(e){
+    err.style.color='red';
+    err.innerText='Error: '+e.code;
+  }
+}
 
 window.entrarAdmin = async () => {
   const email = document.getElementById('adminEmail').value.trim();
@@ -161,6 +175,7 @@ window.descargarExcel=()=>{
   <input id="adminPass" type="password" placeholder="Contraseña">
   <button onclick="entrarAdmin()">Entrar</button>
   <p id="adminErr" style="color:red"></p>
+  <p style="text-align:center;font-size:13px;margin-top:8px"><a href="#" onclick="olvideAdmin();return false;" style="color:#0f172a">¿Olvidaste tu contraseña?</a></p>
 </div>
 <div id="panel" style="display:none">
 <div class="top">
