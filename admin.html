@@ -24,7 +24,7 @@ body{background:#f1f5f9;padding:12px}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, getDocs, query, where, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, getDoc, setDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, setPersistence, inMemoryPersistence, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
@@ -82,6 +82,7 @@ window.entrarAdmin = async () => {
     document.getElementById('panel').style.display='block';
     cargar();
     cargarVendedores();
+    cargarHistorial(true);
   } catch(e) {
     err.innerText='Error: '+e.code;
   }
@@ -124,13 +125,12 @@ async function cargarVendedores(){
 
 async function cargar(){
  const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
- const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId)));
+ const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), where("creado",">=",Timestamp.fromDate(inicioHoy))));
  let totalVis=0, totalPed=0, totalCob=0;
  let porVendedor = {}; datosGlobal=[];
  let htmlVisitas='';
 snap.forEach(doc=>{
    const d=doc.data();
-   if(!d.creado || d.creado.toDate() < inicioHoy) return;
    datosGlobal.push(d);
    totalVis++; totalPed+=Number(d.pedido||0); totalCob+=Number(d.cobro||0);
    const vend=(d.vendedor||'sin-vendedor').toLowerCase();
@@ -150,6 +150,31 @@ snap.forEach(doc=>{
  document.getElementById('lista').innerHTML=htmlVisitas;
 }
 window.cargar=cargar;
+
+let ultimoDocHistorial = null;
+
+window.cargarHistorial = async (reset) => {
+  if(reset){ ultimoDocHistorial = null; document.getElementById('historial').innerHTML=''; }
+  let q;
+  if(ultimoDocHistorial){
+    q = query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), startAfter(ultimoDocHistorial), limit(20));
+  } else {
+    q = query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), limit(20));
+  }
+  const snap = await getDocs(q);
+  let html = '';
+  snap.forEach(doc=>{
+    const d = doc.data();
+    html += `<div class="visita"><img src="${d.foto||''}"><div><b>${d.cliente||''}</b> - <span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>Ped: $${Number(d.pedido||0).toLocaleString()} | Cob: $${Number(d.cobro||0).toLocaleString()} | ${d.hora||''}</small><br><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Ver mapa</a></div></div>`;
+  });
+  document.getElementById('historial').innerHTML += html || (ultimoDocHistorial ? '' : '<p>No hay historial todavía</p>');
+  if(!snap.empty){
+    ultimoDocHistorial = snap.docs[snap.docs.length-1];
+    document.getElementById('btnMasHistorial').style.display = snap.docs.length < 20 ? 'none' : 'block';
+  } else {
+    document.getElementById('btnMasHistorial').style.display = 'none';
+  }
+}
 
 window.descargarExcel=()=>{
   if(datosGlobal.length==0){alert('No hay datos');return;}
@@ -202,7 +227,10 @@ window.descargarExcel=()=>{
 
 <h4 style="margin:10px 4px">🏆 Ranking por Vendedor</h4>
 <div id="ranking" class="rank"></div>
-<h4 style="margin:18px 4px 8px">📋 Últimas Visitas</h4>
+<h4 style="margin:18px 4px 8px">📋 Últimas Visitas (Hoy)</h4>
 <div id="lista"></div>
+<h4 style="margin:18px 4px 8px">🗂️ Historial completo</h4>
+<div id="historial"></div>
+<button id="btnMasHistorial" class="btn btn-white" style="margin-top:10px" onclick="cargarHistorial(false)">Cargar más</button>
 </div>
 </body></html>
