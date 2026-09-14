@@ -16,7 +16,7 @@ body{background:#f1f5f9;padding:12px}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, getDocs, query, where, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
@@ -59,6 +59,9 @@ async function cargarEmpresas(){
       <button class="btn-toggle ${activa ? 'btn-bloquear' : 'btn-activar'}" onclick="cambiarEstado('${d.id}', ${activa})">
         ${activa ? 'Bloquear' : 'Activar'}
       </button>
+      <button class="btn-toggle" style="background:#6b7280;margin-left:6px" onclick="eliminarEmpresa('${d.id}', '${(data.nombre||'').replace(/'/g,"")}')">
+        🗑️ Eliminar
+      </button>
     </div>`;
   });
   document.getElementById('listaEmpresas').innerHTML = html || '<p>No hay empresas registradas todavía</p>';
@@ -66,6 +69,22 @@ async function cargarEmpresas(){
 
 window.cambiarEstado = async (empresaId, estadoActual) => {
   await updateDoc(doc(db, "empresas", empresaId), { activa: !estadoActual });
+  cargarEmpresas();
+}
+
+window.eliminarEmpresa = async (empresaId, nombreEmpresa) => {
+  const confirmar = confirm(`¿Seguro que quieres ELIMINAR "${nombreEmpresa}"?\n\nEsto borrará permanentemente:\n- La empresa\n- Todos sus vendedores registrados\n- Todas sus visitas\n\nEsta acción NO se puede deshacer. Ya descargaste el respaldo, ¿verdad?`);
+  if(!confirmar) return;
+
+  const visitasSnap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",empresaId)));
+  for (const v of visitasSnap.docs) { await deleteDoc(doc(db,"visitas", v.id)); }
+
+  const usuariosSnap = await getDocs(query(collection(db,"usuarios"), where("empresa_id","==",empresaId)));
+  for (const u of usuariosSnap.docs) { await deleteDoc(doc(db,"usuarios", u.id)); }
+
+  await deleteDoc(doc(db,"empresas", empresaId));
+
+  alert('✅ Empresa eliminada de Firestore.\n\nRecuerda: las cuentas de acceso (correos/claves) siguen existiendo en Firebase Authentication. Si quieres borrarlas también, hazlo manualmente ahí.');
   cargarEmpresas();
 }
 
