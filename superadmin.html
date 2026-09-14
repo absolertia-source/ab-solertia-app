@@ -68,6 +68,31 @@ window.cambiarEstado = async (empresaId, estadoActual) => {
   await updateDoc(doc(db, "empresas", empresaId), { activa: !estadoActual });
   cargarEmpresas();
 }
+
+window.descargarBackup = async () => {
+  const btn = document.getElementById('btnBackup');
+  btn.innerText = 'Generando respaldo...';
+  btn.disabled = true;
+  try {
+    const backup = {};
+    for (const nombreColeccion of ["empresas", "usuarios", "visitas"]) {
+      const snap = await getDocs(collection(db, nombreColeccion));
+      backup[nombreColeccion] = [];
+      snap.forEach(d => backup[nombreColeccion].push({ id: d.id, ...d.data() }));
+    }
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `TrazaGO_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    alert('Error generando el respaldo: ' + e.message);
+  }
+  btn.innerText = '💾 Descargar respaldo completo';
+  btn.disabled = false;
+}
 </script></head><body>
 <div id="loginSuper" class="login">
   <h2>TrazaGO</h2><small>Super Admin</small><br><br>
@@ -78,6 +103,7 @@ window.cambiarEstado = async (empresaId, estadoActual) => {
 </div>
 <div id="panelSuper" style="display:none">
   <div class="top"><h3>TrazaGO - Super Admin</h3></div>
+  <button id="btnBackup" class="btn-toggle btn-activar" style="margin-bottom:14px" onclick="descargarBackup()">💾 Descargar respaldo completo</button>
   <div id="listaEmpresas"></div>
 </div>
 </body></html>
