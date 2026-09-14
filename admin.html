@@ -20,11 +20,11 @@ body{background:#f1f5f9;padding:12px}
 .card{background:white;padding:14px;border-radius:16px;margin:14px 0}
 .card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
 .card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px}
-.vendedor-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
+.vendedor-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px;align-items:center}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, getDoc, setDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, getDoc, setDoc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, setPersistence, inMemoryPersistence, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
@@ -119,8 +119,19 @@ window.invitarVendedor = async () => {
 async function cargarVendedores(){
   const snap = await getDocs(query(collection(db,"usuarios"), where("empresa_id","==",miEmpresaId), where("rol","==","vendedor")));
   let html = '';
-  snap.forEach(d=>{ html += `<div class="vendedor-item"><span>👤 ${d.data().email}</span></div>`; });
+  snap.forEach(d=>{ html += `<div class="vendedor-item"><span>👤 ${d.data().email}</span><button style="width:auto;padding:4px 10px;background:#dc2626;color:white;border:none;border-radius:8px;font-size:12px;cursor:pointer" onclick="eliminarVendedor('${d.id}','${d.data().email}')">🗑️ Eliminar</button></div>`; });
   document.getElementById('listaVendedores').innerHTML = html || '<small>Aún no has invitado vendedores</small>';
+}
+
+window.eliminarVendedor = async (uid, email) => {
+  const confirmar = confirm(`¿Eliminar al vendedor ${email}?\n\nSus visitas registradas NO se borran, solo perderá acceso a la app.\n\nEsta acción no se puede deshacer.`);
+  if(!confirmar) return;
+  try {
+    await deleteDoc(doc(db, "usuarios", uid));
+    cargarVendedores();
+  } catch(e) {
+    alert('Error: ' + e.code);
+  }
 }
 
 async function cargar(){
