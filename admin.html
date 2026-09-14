@@ -152,9 +152,10 @@ snap.forEach(doc=>{
 window.cargar=cargar;
 
 let ultimoDocHistorial = null;
+let idsHistorialCargados = new Set();
 
 window.cargarHistorial = async (reset) => {
-  if(reset){ ultimoDocHistorial = null; document.getElementById('historial').innerHTML=''; }
+  if(reset){ ultimoDocHistorial = null; idsHistorialCargados.clear(); document.getElementById('historial').innerHTML=''; }
   let q;
   if(ultimoDocHistorial){
     q = query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), startAfter(ultimoDocHistorial), limit(20));
@@ -164,6 +165,8 @@ window.cargarHistorial = async (reset) => {
   const snap = await getDocs(q);
   let html = '';
   snap.forEach(doc=>{
+    if(idsHistorialCargados.has(doc.id)) return;
+    idsHistorialCargados.add(doc.id);
     const d = doc.data();
     html += `<div class="visita"><img src="${d.foto||''}"><div><b>${d.cliente||''}</b> - <span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>Ped: $${Number(d.pedido||0).toLocaleString()} | Cob: $${Number(d.cobro||0).toLocaleString()} | ${d.hora||''}</small><br><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Ver mapa</a></div></div>`;
   });
