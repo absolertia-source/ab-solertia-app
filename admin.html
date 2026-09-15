@@ -36,6 +36,10 @@ const secondaryApp = initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = getAuth(secondaryApp);
 await setPersistence(secondaryAuth, inMemoryPersistence);
 
+async function registrarError(contexto, mensaje){
+  try{ await setDoc(doc(collection(db,"errores")), { app:'admin', contexto, mensaje, empresa_id: miEmpresaId||'', fecha: Timestamp.now() }); }catch(e){}
+}
+
 let datosGlobal=[];
 let miEmpresaId = null;
 
@@ -87,6 +91,7 @@ window.entrarAdmin = async () => {
     cambiarTab('hoy');
   } catch(e) {
     err.innerText='Error: '+e.code;
+    registrarError('login_admin', e.code||e.message);
   }
 }
 
@@ -138,6 +143,7 @@ window.invitarVendedor = async () => {
     cargarVendedores();
   } catch(e) {
     msg.innerText = 'Error: ' + e.code;
+    registrarError('invitar_vendedor', e.code||e.message);
   }
 }
 
