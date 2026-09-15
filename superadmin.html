@@ -40,6 +40,7 @@ window.entrarSuper = async () => {
     document.getElementById('loginSuper').style.display = 'none';
     document.getElementById('panelSuper').style.display = 'block';
     cargarEmpresas();
+    cargarErrores();
   } catch(e) {
     err.innerText = 'Error: ' + e.code;
   }
@@ -88,6 +89,26 @@ window.eliminarEmpresa = async (empresaId, nombreEmpresa) => {
   cargarEmpresas();
 }
 
+async function cargarErrores(){
+  const snap = await getDocs(collection(db, "errores"));
+  const errores = [];
+  snap.forEach(d => errores.push({id:d.id, ...d.data()}));
+  errores.sort((a,b) => (b.fecha?.toMillis?.()||0) - (a.fecha?.toMillis?.()||0));
+  let html = '';
+  errores.slice(0,50).forEach(e => {
+    const fecha = e.fecha?.toDate ? e.fecha.toDate().toLocaleString() : '';
+    html += `<div class="empresa" style="border-left:4px solid #dc2626">
+      <div>
+        <b>${e.contexto || 'error'}</b> <small style="color:#6b7280">(${e.app||''})</small>
+        <br><small style="color:#dc2626">${e.mensaje||''}</small>
+        <br><small style="color:#9ca3af">${fecha}${e.usuario?' · '+e.usuario:''}</small>
+      </div>
+    </div>`;
+  });
+  document.getElementById('listaErrores').innerHTML = html || '<p>No hay errores registrados 🎉</p>';
+}
+window.cargarErrores = cargarErrores;
+
 window.descargarBackup = async () => {
   const btn = document.getElementById('btnBackup');
   btn.innerText = 'Generando respaldo...';
@@ -124,5 +145,7 @@ window.descargarBackup = async () => {
   <div class="top"><h3>TrazaGO - Super Admin</h3></div>
   <button id="btnBackup" class="btn-toggle btn-activar" style="margin-bottom:14px" onclick="descargarBackup()">💾 Descargar respaldo completo</button>
   <div id="listaEmpresas"></div>
+  <h3 style="margin:20px 4px 10px">⚠️ Errores recientes</h3>
+  <div id="listaErrores"></div>
 </div>
 </body></html>
