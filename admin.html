@@ -20,7 +20,7 @@ body{background:#f1f5f9;padding:12px}
 .card{background:white;padding:14px;border-radius:16px;margin:14px 0}
 .card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
 .card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px}
-.vendedor-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px;align-items:center}
+.vendedor-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -80,12 +80,37 @@ window.entrarAdmin = async () => {
     document.getElementById('nombreEmpresaTop').innerText = usuarioSnap.data().empresa_nombre || '';
     document.getElementById('loginAdmin').style.display='none';
     document.getElementById('panel').style.display='block';
+    await archivarYLimpiarAntiguos();
     cargar();
     cargarVendedores();
     cargarHistorial(true);
+    cambiarTab('hoy');
   } catch(e) {
     err.innerText='Error: '+e.code;
   }
+}
+
+async function archivarYLimpiarAntiguos(){
+  const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
+  const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), where("creado","<",Timestamp.fromDate(inicioHoy))));
+  if(snap.empty) return;
+
+  const datosViejos = [];
+  snap.forEach(d => datosViejos.push(d.data()));
+
+  const datosExcel = datosViejos.map(d=>({
+    Vendedor: d.vendedor, Cliente: d.cliente, Pedido: d.pedido, Cobro: d.cobro,
+    Fecha: d.hora, Latitud: d.lat, Longitud: d.lng,
+    Mapa: `https://www.google.com/maps?q=${d.lat},${d.lng}`
+  }));
+  const ws = XLSX.utils.json_to_sheet(datosExcel);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Archivo");
+  XLSX.writeFile(wb, `TrazaGO_ARCHIVO_hasta_${new Date().toLocaleDateString().replace(/\//g,'-')}.xlsx`);
+
+  for (const d of snap.docs) { await deleteDoc(doc(db,"visitas", d.id)); }
+
+  alert(`📦 Se archivaron ${snap.size} visitas de días anteriores en un Excel que se descargó automáticamente, y se borraron de la base de datos.`);
 }
 
 window.invitarVendedor = async () => {
@@ -131,6 +156,27 @@ window.eliminarVendedor = async (uid, email) => {
     cargarVendedores();
   } catch(e) {
     alert('Error: ' + e.code);
+  }
+}
+
+window.cambiarTab = (tab) => {
+  const btnMas = document.getElementById('btnMasHistorial');
+  if(tab === 'hoy'){
+    document.getElementById('lista').style.display = 'block';
+    document.getElementById('historial').style.display = 'none';
+    btnMas.style.display = 'none';
+    document.getElementById('tabHoy').style.background = '#0f172a';
+    document.getElementById('tabHoy').style.color = 'white';
+    document.getElementById('tabHistorial').style.background = 'white';
+    document.getElementById('tabHistorial').style.color = '#0f172a';
+  } else {
+    document.getElementById('lista').style.display = 'none';
+    document.getElementById('historial').style.display = 'block';
+    btnMas.style.display = 'block';
+    document.getElementById('tabHistorial').style.background = '#0f172a';
+    document.getElementById('tabHistorial').style.color = 'white';
+    document.getElementById('tabHoy').style.background = 'white';
+    document.getElementById('tabHoy').style.color = '#0f172a';
   }
 }
 
@@ -241,10 +287,12 @@ window.descargarExcel=()=>{
 
 <h4 style="margin:10px 4px">🏆 Ranking por Vendedor</h4>
 <div id="ranking" class="rank"></div>
-<h4 style="margin:18px 4px 8px">📋 Últimas Visitas (Hoy)</h4>
+<div style="display:flex;gap:8px;margin:18px 4px 8px">
+  <button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Hoy</button>
+  <button id="tabHistorial" class="btn btn-white" style="flex:1" onclick="cambiarTab('historial')">🗂️ Historial</button>
+</div>
 <div id="lista"></div>
-<h4 style="margin:18px 4px 8px">🗂️ Historial completo</h4>
-<div id="historial"></div>
-<button id="btnMasHistorial" class="btn btn-white" style="margin-top:10px" onclick="cargarHistorial(false)">Cargar más</button>
+<div id="historial" style="display:none"></div>
+<button id="btnMasHistorial" class="btn btn-white" style="margin-top:10px;display:none" onclick="cargarHistorial(false)">Cargar más</button>
 </div>
 </body></html>
