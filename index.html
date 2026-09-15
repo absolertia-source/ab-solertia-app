@@ -30,6 +30,9 @@ window.logoutFirebase = async () => { return await signOut(auth); }
 window.getUsuarioDoc = async (uid) => { return await getDoc(doc(db, "usuarios", uid)); }
 window.getEmpresaDoc = async (empresaId) => { return await getDoc(doc(db, "empresas", empresaId)); }
 window.recuperarClave = async (email) => { return await sendPasswordResetEmail(auth, email); }
+window.registrarError = async (contexto, mensaje) => {
+  try{ await addDoc(collection(db,"errores"), { app:'index', contexto, mensaje, usuario: localStorage.getItem('ab_vend')||'', empresa_id: localStorage.getItem('ab_empresa')||'', fecha: serverTimestamp() }); }catch(e){}
+}
 </script></head><body>
 <div id="login" class="login"><h2>TrazaGO</h2><small>Vendedores</small><br><br><input id="emp" placeholder="Correo"><input id="pass" type="password" placeholder="Contraseña"><button onclick="entrar()">Entrar</button><p id="err" style="color:red"></p><p style="text-align:center;font-size:13px;margin-top:8px"><a href="#" onclick="olvide();return false;" style="color:#0f172a">¿Olvidaste tu contraseña?</a></p></div>
 <div id="app" style="display:none"><div class="top"><b id="info"></b><button onclick="salir()" style="width:auto;padding:6px 12px">Salir</button></div><button onclick="nueva()" style="margin-top:12px">+ Nueva Visita</button><div id="lista"></div></div>
@@ -76,6 +79,7 @@ async function entrar(){
     mostrarApp();
   } catch(e){
     err.innerText='Error: '+e.code;
+    window.registrarError('login', e.code||e.message);
   }
 }
 function mostrarApp(){document.getElementById('login').style.display='none'; document.getElementById('app').style.display='block'; document.getElementById('info').innerText=localStorage.getItem('ab_vend');}
@@ -94,6 +98,6 @@ async function olvide(){
 }
 function salir(){ window.logoutFirebase(); localStorage.clear(); location.reload(); }
 function nueva(){document.getElementById('formVis').style.display='block'; document.getElementById('gpsStat').innerText='📡 Buscando GPS...'; if(navigator.geolocation){navigator.geolocation.getCurrentPosition(pos=>{lat=pos.coords.latitude; lng=pos.coords.longitude; gpsValido=true; document.getElementById('gpsStat').innerText='✅ GPS OK: '+lat.toFixed(5)+','+lng.toFixed(5); document.getElementById('gpsStat').style.background='#dcfce7';},err=>{gpsValido=false;document.getElementById('gpsStat').innerText='❌ SIN GPS REAL - ubicación no confirmada';document.getElementById('gpsStat').style.background='#fecaca';},{enableHighAccuracy:true,timeout:8000});}}
-async function guardar(){const cli=document.getElementById('cli').value; const ped=document.getElementById('ped').value||0; const cob=document.getElementById('cob').value||0; if(!cli){alert('Pon nombre cliente');return;} if(!fotoBase){alert('Foto cargando... espera 1 seg');return;} try{await window.guardarFirebase({empresa_id:localStorage.getItem('ab_empresa'),vendedor:localStorage.getItem('ab_vend'),cliente:cli,pedido:ped,cobro:cob,foto:fotoBase||'',lat:lat,lng:lng,gpsValido:gpsValido,hora:new Date().toLocaleString()}); alert('¡Guardado!'); document.getElementById('formVis').style.display='none'; document.getElementById('cli').value=''; document.getElementById('prevFoto').style.display='none'; document.getElementById('infoFoto').innerText=''; fotoBase='';}catch(e){alert('Error: '+e.message);}}
+async function guardar(){const cli=document.getElementById('cli').value; const ped=document.getElementById('ped').value||0; const cob=document.getElementById('cob').value||0; if(!cli){alert('Pon nombre cliente');return;} if(!fotoBase){alert('Foto cargando... espera 1 seg');return;} try{await window.guardarFirebase({empresa_id:localStorage.getItem('ab_empresa'),vendedor:localStorage.getItem('ab_vend'),cliente:cli,pedido:ped,cobro:cob,foto:fotoBase||'',lat:lat,lng:lng,gpsValido:gpsValido,hora:new Date().toLocaleString()}); alert('¡Guardado!'); document.getElementById('formVis').style.display='none'; document.getElementById('cli').value=''; document.getElementById('prevFoto').style.display='none'; document.getElementById('infoFoto').innerText=''; fotoBase='';}catch(e){alert('Error: '+e.message); window.registrarError('guardar_visita', e.message);}}
 if(localStorage.getItem('ab_vend') && localStorage.getItem('ab_empresa')){ miEmpresaId=localStorage.getItem('ab_empresa'); mostrarApp(); }
 </script></body></html>
