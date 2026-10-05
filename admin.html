@@ -1,5 +1,6 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Panel Jefe - TrazaGO</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
 body{background:#f1f5f9;padding:12px}
@@ -22,6 +23,7 @@ body{background:#f1f5f9;padding:12px}
 .card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
 .card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px}
 .vendedor-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
+.search-box{width:100%;padding:12px;border-radius:10px;border:2px solid #0f172a;margin:10px 0;font-size:16px}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -37,180 +39,92 @@ const secondaryApp = initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = getAuth(secondaryApp);
 await setPersistence(secondaryAuth, inMemoryPersistence);
 
-async function registrarError(contexto, mensaje){
-  try{ await setDoc(doc(collection(db,"errores")), { app:'admin', contexto, mensaje, empresa_id: miEmpresaId||'', fecha: Timestamp.now() }); }catch(e){}
-}
-
 let datosGlobal=[];
 let miEmpresaId = null;
-
-window.olvideAdmin = async () => {
-  const email = document.getElementById('adminEmail').value.trim();
-  const err = document.getElementById('adminErr');
-  if(!email){ err.style.color='red'; err.innerText='Escribe tu correo arriba primero'; return; }
-  try{
-    await sendPasswordResetEmail(auth, email);
-    err.style.color='green';
-    err.innerText='✅ Te enviamos un correo para restablecer tu clave. Revisa también spam.';
-  }catch(e){
-    err.style.color='red';
-    err.innerText='Error: '+e.code;
-  }
-}
 
 window.entrarAdmin = async () => {
   const email = document.getElementById('adminEmail').value.trim();
   const pass = document.getElementById('adminPass').value.trim();
   const err = document.getElementById('adminErr');
-  err.innerText = '';
   try {
     const cred = await signInWithEmailAndPassword(auth, email, pass);
-
     const usuarioSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
     if(!usuarioSnap.exists() || usuarioSnap.data().rol !== "admin"){
-      err.innerText = 'Esta cuenta no tiene permisos de administrador';
-      await signOut(auth);
-      return;
+      err.innerText = 'Sin permisos de admin';
+      await signOut(auth); return;
     }
-
     miEmpresaId = usuarioSnap.data().empresa_id;
-
-    const empresaSnap = await getDoc(doc(db, "empresas", miEmpresaId));
-    if(empresaSnap.exists() && empresaSnap.data().activa === false){
-      err.innerText = 'Tu empresa fue suspendida. Contacta al proveedor.';
-      await signOut(auth);
-      return;
-    }
-
     document.getElementById('nombreEmpresaTop').innerText = usuarioSnap.data().empresa_nombre || '';
     document.getElementById('loginAdmin').style.display='none';
     document.getElementById('panel').style.display='block';
-    await archivarYLimpiarAntiguos();
     cargar();
     cargarVendedores();
     cargarHistorial(true);
     cambiarTab('hoy');
-  } catch(e) {
-    err.innerText='Error: '+e.code;
-    registrarError('login_admin', e.code||e.message);
-  }
-}
-
-async function archivarYLimpiarAntiguos(){
-  const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
-  const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), where("creado","<",Timestamp.fromDate(inicioHoy))));
-  if(snap.empty) return;
-
-  const datosViejos = [];
-  snap.forEach(d => datosViejos.push(d.data()));
-
-  const datosExcel = datosViejos.map(d=>({
-    Mensajero: d.vendedor, Guia: d.guia, Estado: d.estado, Cliente: d.cliente, Firmado: d.firma ? 'Sí' : 'No',
-    Fecha: d.hora, Latitud: d.lat, Longitud: d.lng,
-    Mapa: `https://www.google.com/maps?q=${d.lat},${d.lng}`
-  }));
-  const ws = XLSX.utils.json_to_sheet(datosExcel);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Archivo");
-  XLSX.writeFile(wb, `TrazaGO_ARCHIVO_hasta_${new Date().toLocaleDateString().replace(/\//g,'-')}.xlsx`);
-
-  for (const d of snap.docs) { await deleteDoc(doc(db,"visitas", d.id)); }
-
-  alert(`📦 Se archivaron ${snap.size} entregas de días anteriores en un Excel, y se borraron de la base de datos.`);
+  } catch(e) { err.innerText='Error: '+e.code; }
 }
 
 window.invitarVendedor = async () => {
   const email = document.getElementById('vendEmail').value.trim();
   const pass = document.getElementById('vendPass').value.trim();
-  const msg = document.getElementById('vendMsg');
-  msg.style.color = 'red';
-  msg.innerText = '';
-
-  if(!email || !pass){ msg.innerText='Completa correo y clave'; return; }
-  if(pass.length < 6){ msg.innerText='La clave debe tener al menos 6 caracteres'; return; }
-
+  if(!email || !pass){ alert('Completa datos'); return; }
   try {
     const cred = await createUserWithEmailAndPassword(secondaryAuth, email, pass);
-    await setDoc(doc(db, "usuarios", cred.user.uid), {
-      email: email,
-      empresa_id: miEmpresaId,
-      rol: "vendedor"
-    });
+    await setDoc(doc(db, "usuarios", cred.user.uid), { email, empresa_id: miEmpresaId, rol: "vendedor" });
     await signOut(secondaryAuth);
-    msg.style.color = 'green';
-    msg.innerText = '✅ Mensajero creado: ' + email;
-    document.getElementById('vendEmail').value = '';
-    document.getElementById('vendPass').value = '';
+    alert('✅ Mensajero creado');
     cargarVendedores();
-  } catch(e) {
-    msg.innerText = 'Error: ' + e.code;
-    registrarError('invitar_vendedor', e.code||e.message);
-  }
+  } catch(e) { alert('Error: ' + e.code); }
 }
 
 async function cargarVendedores(){
   const snap = await getDocs(query(collection(db,"usuarios"), where("empresa_id","==",miEmpresaId), where("rol","==","vendedor")));
   let html = '';
-  snap.forEach(d=>{ html += `<div class="vendedor-item"><span>👤 ${d.data().email}</span><button style="width:auto;padding:4px 10px;background:#dc2626;color:white;border:none;border-radius:8px;font-size:12px;cursor:pointer" onclick="eliminarVendedor('${d.id}','${d.data().email}')">🗑️ Eliminar</button></div>`; });
-  document.getElementById('listaVendedores').innerHTML = html || '<small>Aún no has invitado mensajeros</small>';
+  snap.forEach(d=>{ html += `<div class="vendedor-item"><span>👤 ${d.data().email}</span><button style="width:auto;padding:4px 10px;background:#dc2626;color:white;border:none;border-radius:8px;font-size:12px;cursor:pointer" onclick="eliminarVendedor('${d.id}','${d.data().email}')">🗑️</button></div>`; });
+  document.getElementById('listaVendedores').innerHTML = html;
 }
 
 window.eliminarVendedor = async (uid, email) => {
-  const confirmar = confirm(`¿Eliminar a ${email}?\n\nSus entregas registradas NO se borran, solo perderá acceso a la app.`);
-  if(!confirmar) return;
-  try {
-    await deleteDoc(doc(db, "usuarios", uid));
-    cargarVendedores();
-  } catch(e) {
-    alert('Error: ' + e.code);
-  }
+  if(confirm(`¿Eliminar ${email}?`)){ await deleteDoc(doc(db, "usuarios", uid)); cargarVendedores(); }
 }
 
 window.cambiarTab = (tab) => {
-  const btnMas = document.getElementById('btnMasHistorial');
-  if(tab === 'hoy'){
-    document.getElementById('lista').style.display = 'block';
-    document.getElementById('historial').style.display = 'none';
-    btnMas.style.display = 'none';
-    document.getElementById('tabHoy').style.background = '#0f172a';
-    document.getElementById('tabHoy').style.color = 'white';
-    document.getElementById('tabHistorial').style.background = 'white';
-    document.getElementById('tabHistorial').style.color = '#0f172a';
-  } else {
-    document.getElementById('lista').style.display = 'none';
-    document.getElementById('historial').style.display = 'block';
-    btnMas.style.display = 'block';
-    document.getElementById('tabHistorial').style.background = '#0f172a';
-    document.getElementById('tabHistorial').style.color = 'white';
-    document.getElementById('tabHoy').style.background = 'white';
-    document.getElementById('tabHoy').style.color = '#0f172a';
-  }
+  document.getElementById('lista').style.display = tab === 'hoy' ? 'block' : 'none';
+  document.getElementById('historial').style.display = tab === 'hoy' ? 'none' : 'block';
+  document.getElementById('tabHoy').style.background = tab === 'hoy' ? '#0f172a' : 'white';
+  document.getElementById('tabHoy').style.color = tab === 'hoy' ? 'white' : '#0f172a';
+  document.getElementById('tabHistorial').style.background = tab === 'hoy' ? 'white' : '#0f172a';
+  document.getElementById('tabHistorial').style.color = tab === 'hoy' ? '#0f172a' : 'white';
 }
 
-function tarjetaVisita(d){
-  const firmaHtml = d.firma
-    ? `<img class="firma-mini" src="${d.firma}" title="Firma de recibido">`
-    : `<div class="firma-mini" style="display:flex;align-items:center;justify-content:center;font-size:10px;color:#dc2626;text-align:center">Sin firma</div>`;
-  
+function tarjetaVisita(d, index){
   const estadoColor = d.estado === 'Entregado' ? '#16a34a' : (d.estado === 'Rechazado' ? '#dc2626' : '#ea580c');
-  
-  return `<div class="visita"><img src="${d.foto||''}"><div style="flex:1"><b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span><br><small>👤 ${d.cliente||''}</small><br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Ver mapa</a></div>${firmaHtml}</div>`;
+  return `<div class="visita">
+    <img src="${d.foto||''}">
+    <div style="flex:1">
+      <b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span><br>
+      <small>👤 ${d.cliente||''}</small><br>
+      <span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br>
+      <small>${d.hora||''}</small><br>
+      <div style="margin-top:5px; display:flex; gap:10px">
+        <a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Mapa</a>
+        <button onclick="descargarPDF(${index})" style="font-size:11px; padding:2px 5px; cursor:pointer">📄 PDF</button>
+      </div>
+    </div>
+    <img class="firma-mini" src="${d.firma||''}">
+  </div>`;
 }
 
 async function cargar(){
  const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
  const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), where("creado",">=",Timestamp.fromDate(inicioHoy))));
- let totalVis=0, totalFirmadas=0;
- let porVendedor = {}; datosGlobal=[];
- let htmlVisitas='';
-snap.forEach(doc=>{
-   const d=doc.data();
-   datosGlobal.push(d);
-   totalVis++; if(d.firma) totalFirmadas++;
+ let totalVis=0, totalFirmadas=0; let porVendedor = {}; datosGlobal=[]; let htmlVisitas='';
+ snap.forEach((doc, index)=>{
+   const d=doc.data(); datosGlobal.push(d); totalVis++; if(d.firma) totalFirmadas++;
    const vend=(d.vendedor||'sin-vendedor').toLowerCase();
    if(!porVendedor[vend]) porVendedor[vend]={visitas:0,firmadas:0};
    porVendedor[vend].visitas++; if(d.firma) porVendedor[vend].firmadas++;
-   htmlVisitas+=tarjetaVisita(d);
+   htmlVisitas+=tarjetaVisita(d, index);
  });
  document.getElementById('totalVis').innerText=totalVis;
  document.getElementById('totalFirmadas').innerText=totalFirmadas;
@@ -218,98 +132,93 @@ snap.forEach(doc=>{
  let htmlRank='';
  Object.keys(porVendedor).sort().forEach(v=>{
    const r=porVendedor[v];
-   htmlRank+=`<div class="vend-card"><b>👤 ${v}</b><br><small>${r.visitas} entregas</small><br><div style="margin-top:6px"><b style="color:#16a34a">${r.firmadas}</b> <small>con firma</small></div></div>`;
+   htmlRank+=`<div class="vend-card"><b>👤 ${v}</b><br><small>${r.visitas} entregas</small></div>`;
  });
- document.getElementById('ranking').innerHTML=htmlRank||'Aún no hay entregas hoy';
+ document.getElementById('ranking').innerHTML=htmlRank;
  document.getElementById('lista').innerHTML=htmlVisitas;
 }
 window.cargar=cargar;
 
-let ultimoDocHistorial = null;
-let idsHistorialCargados = new Set();
+window.filtrarEntregas = () => {
+  const texto = document.getElementById('searchGuia').value.toLowerCase();
+  const filtrados = datosGlobal.filter(d => d.guia.toLowerCase().includes(texto) || d.cliente.toLowerCase().includes(texto));
+  document.getElementById('lista').innerHTML = filtrados.map((d, i) => tarjetaVisita(d, i)).join('');
+}
 
-window.cargarHistorial = async (reset) => {
-  if(reset){ ultimoDocHistorial = null; idsHistorialCargados.clear(); document.getElementById('historial').innerHTML=''; }
-  let q;
-  if(ultimoDocHistorial){
-    q = query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), startAfter(ultimoDocHistorial), limit(20));
-  } else {
-    q = query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), limit(20));
-  }
-  const snap = await getDocs(q);
-  let html = '';
-  snap.forEach(doc=>{
-    if(idsHistorialCargados.has(doc.id)) return;
-    idsHistorialCargados.add(doc.id);
-    html += tarjetaVisita(doc.data());
-  });
-  document.getElementById('historial').innerHTML += html || (ultimoDocHistorial ? '' : '<p>No hay historial todavía</p>');
-  if(!snap.empty){
-    ultimoDocHistorial = snap.docs[snap.docs.length-1];
-    document.getElementById('btnMasHistorial').style.display = snap.docs.length < 20 ? 'none' : 'block';
-  } else {
-    document.getElementById('btnMasHistorial').style.display = 'none';
-  }
+window.descargarPDF = async (index) => {
+  const { jsPDF } = window.jspdf;
+  const docPdf = new jsPDF();
+  const d = datosGlobal[index];
+
+  docPdf.setFontSize(20);
+  docPdf.text("Certificado de Entrega - TrazaGO", 20, 20);
+  docPdf.setFontSize(12);
+  docPdf.text(`Guía/Pedido: ${d.guia}`, 20, 35);
+  docPdf.text(`Receptor: ${d.cliente}`, 20, 42);
+  docPdf.text(`Estado: ${d.estado}`, 20, 49);
+  docPdf.text(`Mensajero: ${d.vendedor}`, 20, 56);
+  docPdf.text(`Fecha y Hora: ${d.hora}`, 20, 63);
+  docPdf.text(`Ubicación: ${d.lat}, ${d.lng}`, 20, 70);
+
+  if(d.foto) docPdf.addImage(d.foto, 'JPEG', 20, 80, 60, 60);
+  if(d.firma) docPdf.addImage(d.firma, 'PNG', 100, 80, 60, 30);
+  
+  docPdf.text("Este documento sirve como prueba legal de entrega.", 20, 160);
+  docPdf.save(`Entrega_${d.guia}.pdf`);
 }
 
 window.descargarExcel=()=>{
   if(datosGlobal.length==0){alert('No hay datos');return;}
-  const datosExcel = datosGlobal.map(d=>({
-    Mensajero: d.vendedor,
-    Guia: d.guia,
-    Estado: d.estado,
-    Receptor: d.cliente,
-    Firmado: d.firma ? 'Sí' : 'No',
-    Fecha: d.hora,
-    Latitud: d.lat,
-    Longitud: d.lng,
-    Mapa: `https://www.google.com/maps?q=${d.lat},${d.lng}`
-  }));
-  const ws = XLSX.utils.json_to_sheet(datosExcel);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Entregas");
-  XLSX.writeFile(wb, `TrazaGO_Entregas_${new Date().toLocaleDateString()}.xlsx`);
+  const datosExcel = datosGlobal.map(d=>({ Mensajero: d.vendedor, Guia: d.guia, Estado: d.estado, Receptor: d.cliente, Firmado: d.firma?'Sí':'No', Fecha: d.hora, Mapa: `https://www.google.com/maps?q=${d.lat},${d.lng}` }));
+  const ws = XLSX.utils.json_to_sheet(datosExcel); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Entregas");
+  XLSX.writeFile(wb, `TrazaGO_Entregas.xlsx`);
+}
+
+async function cargarHistorial(reset){
+  if(reset) document.getElementById('historial').innerHTML='';
+  const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), limit(50)));
+  let html = '';
+  snap.forEach((doc, i) => { html += tarjetaVisita(doc.data(), i); });
+  document.getElementById('historial').innerHTML = html;
 }
 </script></head><body>
 <div id="loginAdmin" class="login">
   <h2>TrazaGO</h2><small>Panel Control de Entregas</small><br><br>
-  <input id="adminEmail" placeholder="Correo">
-  <input id="adminPass" type="password" placeholder="Contraseña">
-  <button onclick="entrarAdmin()">Entrar</button>
+  <input id="adminEmail" placeholder="Correo"><input id="adminPass" type="password" placeholder="Contraseña"><button onclick="entrarAdmin()">Entrar</button>
   <p id="adminErr" style="color:red"></p>
-  <p style="text-align:center;font-size:13px;margin-top:8px"><a href="#" onclick="olvideAdmin();return false;" style="color:#0f172a">¿Olvidaste tu contraseña?</a></p>
 </div>
 <div id="panel" style="display:none">
 <div class="top">
- <h3>TrazaGO - Control de Entregas <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3>
+ <h3>TrazaGO - Control <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3>
   <div style="display:flex;gap:8px">
-    <button class="btn btn-green" onclick="descargarExcel()">📊 Descargar Excel</button>
+    <button class="btn btn-green" onclick="descargarExcel()">📊 Excel</button>
     <button class="btn btn-white" onclick="cargar()">↻ Actualizar</button>
   </div>
 </div>
 <div class="stats">
-  <div class="stat"><b id="totalVis">0</b><small>Entregas Totales</small></div>
+  <div class="stat"><b id="totalVis">0</b><small>Totales</small></div>
   <div class="stat"><b id="totalFirmadas" style="color:#16a34a">0</b><small>Con Firma</small></div>
   <div class="stat"><b id="totalSinFirma" style="color:#dc2626">0</b><small>Sin Firma</small></div>
 </div>
 
 <div class="card">
+  <h4>🔍 Buscar Entrega</h4>
+  <input id="searchGuia" class="search-box" placeholder="Escribe el número de guía o nombre del cliente..." oninput="filtrarEntregas()">
+</div>
+
+<div class="card">
   <h4>➕ Invitar Mensajero</h4>
-  <input id="vendEmail" placeholder="Correo del mensajero">
-  <input id="vendPass" type="password" placeholder="Contraseña (mín. 6 caracteres)">
-  <button onclick="invitarVendedor()">Crear acceso</button>
-  <p id="vendMsg" style="font-size:13px;margin-top:4px"></p>
+  <input id="vendEmail" placeholder="Correo"><input id="vendPass" type="password" placeholder="Clave"><button onclick="invitarVendedor()">Crear acceso</button>
   <div id="listaVendedores" style="margin-top:10px"></div>
 </div>
 
-<h4 style="margin:10px 4px">🏆 Productividad por Mensajero</h4>
+<h4 style="margin:10px 4px">🏆 Productividad</h4>
 <div id="ranking" class="rank"></div>
 <div style="display:flex;gap:8px;margin:18px 4px 8px">
-  <button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Entregas Hoy</button>
+  <button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Hoy</button>
   <button id="tabHistorial" class="btn btn-white" style="flex:1" onclick="cambiarTab('historial')">🗂️ Historial</button>
 </div>
 <div id="lista"></div>
 <div id="historial" style="display:none"></div>
-<button id="btnMasHistorial" class="btn btn-white" style="margin-top:10px;display:none" onclick="cargarHistorial(false)">Cargar más</button>
 </div>
 </body></html>
