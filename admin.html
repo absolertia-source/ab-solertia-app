@@ -68,11 +68,27 @@ window.invitarVendedor = async () => {
   const email = document.getElementById('vendEmail').value.trim();
   const pass = document.getElementById('vendPass').value.trim();
   if(!email || !pass){ alert('Completa datos'); return; }
+  
   try {
+    const empresaSnap = await getDoc(doc(db, "empresas", miEmpresaId));
+    // AQUÍ ESTÁ EL CAMBIO: Convertimos a número aunque sea string
+    let valorMax = empresaSnap.exists() ? empresaSnap.data().max_usuarios : 3;
+    const maxUsuarios = parseInt(valorMax) || 3; 
+    
+    const vendsSnap = await getDocs(query(collection(db,"usuarios"), where("empresa_id","==",miEmpresaId), where("rol","==","vendedor")));
+    const currentCount = vendsSnap.size;
+
+    if(currentCount >= maxUsuarios){
+      alert(`🚫 Límite alcanzado. Tu plan permite un máximo de ${maxUsuarios} mensajeros. Por favor, contacta al administrador de TrazaGO para ampliar tu plan.`);
+      return;
+    }
+
     const cred = await createUserWithEmailAndPassword(secondaryAuth, email, pass);
     await setDoc(doc(db, "usuarios", cred.user.uid), { email, empresa_id: miEmpresaId, rol: "vendedor" });
     await signOut(secondaryAuth);
-    alert('✅ Mensajero creado');
+    alert('✅ Mensajero creado exitosamente');
+    document.getElementById('vendEmail').value = '';
+    document.getElementById('vendPass').value = '';
     cargarVendedores();
   } catch(e) { alert('Error: ' + e.code); }
 }
@@ -156,69 +172,4 @@ window.descargarPDF = async (index) => {
   docPdf.text(`Guía/Pedido: ${d.guia}`, 20, 35);
   docPdf.text(`Receptor: ${d.cliente}`, 20, 42);
   docPdf.text(`Estado: ${d.estado}`, 20, 49);
-  docPdf.text(`Mensajero: ${d.vendedor}`, 20, 56);
-  docPdf.text(`Fecha y Hora: ${d.hora}`, 20, 63);
-  docPdf.text(`Ubicación: ${d.lat}, ${d.lng}`, 20, 70);
-
-  if(d.foto) docPdf.addImage(d.foto, 'JPEG', 20, 80, 60, 60);
-  if(d.firma) docPdf.addImage(d.firma, 'PNG', 100, 80, 60, 30);
-  
-  docPdf.text("Este documento sirve como prueba legal de entrega.", 20, 160);
-  docPdf.save(`Entrega_${d.guia}.pdf`);
-}
-
-window.descargarExcel=()=>{
-  if(datosGlobal.length==0){alert('No hay datos');return;}
-  const datosExcel = datosGlobal.map(d=>({ Mensajero: d.vendedor, Guia: d.guia, Estado: d.estado, Receptor: d.cliente, Firmado: d.firma?'Sí':'No', Fecha: d.hora, Mapa: `https://www.google.com/maps?q=${d.lat},${d.lng}` }));
-  const ws = XLSX.utils.json_to_sheet(datosExcel); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Entregas");
-  XLSX.writeFile(wb, `TrazaGO_Entregas.xlsx`);
-}
-
-async function cargarHistorial(reset){
-  if(reset) document.getElementById('historial').innerHTML='';
-  const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), limit(50)));
-  let html = '';
-  snap.forEach((doc, i) => { html += tarjetaVisita(doc.data(), i); });
-  document.getElementById('historial').innerHTML = html;
-}
-</script></head><body>
-<div id="loginAdmin" class="login">
-  <h2>TrazaGO</h2><small>Panel Control de Entregas</small><br><br>
-  <input id="adminEmail" placeholder="Correo"><input id="adminPass" type="password" placeholder="Contraseña"><button onclick="entrarAdmin()">Entrar</button>
-  <p id="adminErr" style="color:red"></p>
-</div>
-<div id="panel" style="display:none">
-<div class="top">
- <h3>TrazaGO - Control <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3>
-  <div style="display:flex;gap:8px">
-    <button class="btn btn-green" onclick="descargarExcel()">📊 Excel</button>
-    <button class="btn btn-white" onclick="cargar()">↻ Actualizar</button>
-  </div>
-</div>
-<div class="stats">
-  <div class="stat"><b id="totalVis">0</b><small>Totales</small></div>
-  <div class="stat"><b id="totalFirmadas" style="color:#16a34a">0</b><small>Con Firma</small></div>
-  <div class="stat"><b id="totalSinFirma" style="color:#dc2626">0</b><small>Sin Firma</small></div>
-</div>
-
-<div class="card">
-  <h4>🔍 Buscar Entrega</h4>
-  <input id="searchGuia" class="search-box" placeholder="Escribe el número de guía o nombre del cliente..." oninput="filtrarEntregas()">
-</div>
-
-<div class="card">
-  <h4>➕ Invitar Mensajero</h4>
-  <input id="vendEmail" placeholder="Correo"><input id="vendPass" type="password" placeholder="Clave"><button onclick="invitarVendedor()">Crear acceso</button>
-  <div id="listaVendedores" style="margin-top:10px"></div>
-</div>
-
-<h4 style="margin:10px 4px">🏆 Productividad</h4>
-<div id="ranking" class="rank"></div>
-<div style="display:flex;gap:8px;margin:18px 4px 8px">
-  <button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Hoy</button>
-  <button id="tabHistorial" class="btn btn-white" style="flex:1" onclick="cambiarTab('historial')">🗂️ Historial</button>
-</div>
-<div id="lista"></div>
-<div id="historial" style="display:none"></div>
-</div>
-</body></html>
+  docPdf.text(`Mensajero: ${d.vendedor}`, 20*_
