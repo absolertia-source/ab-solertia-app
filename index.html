@@ -45,4 +45,146 @@ window.getUsuarioDoc = async (uid) => { return await getDoc(doc(db, "usuarios", 
 window.getEmpresaDoc = async (empresaId) => { return await getDoc(doc(db, "empresas", empresaId)); }
 window.recuperarClave = async (email) => { return await sendPasswordResetEmail(auth, email); }
 window.registrarError = async (contexto, mensaje) => {
-  try{ await addDoc(collection*
+  try{ await addDoc(collection(db,"errores"), { app:'index', contexto, mensaje, usuario: localStorage.getItem('ab_vend')||'', empresa_id: localStorage.getItem('ab_empresa')||'', fecha: serverTimestamp() }); }catch(e){}
+}
+</script></head><body>
+<div id="login" class="login"><h2>TrazaGO</h2><small>Mensajeros / Entregadores</small><br><br><input id="emp" placeholder="Correo"><input id="pass" type="password" placeholder="Contraseña"><button onclick="entrar()">Entrar</button><p id="err" style="color:red"></p><p style="text-align:center;font-size:13px;margin-top:8px"><a href="#" onclick="olvide();return false;" style="color:#0f172a">¿Olvidaste tu contraseña?</a></p></div>
+<div id="app" style="display:none"><div class="top"><b id="info"></b><button onclick="salir()" style="width:auto;padding:6px 12px">Salir</button></div><button onclick="nueva()" style="margin-top:12px">+ Registrar Entrega</button><div id="lista"></div></div>
+<div id="formVis" style="display:none;position:fixed;inset:0;background:#0008;padding:12px;overflow:auto"><div class="card" style="max-width:500px;margin:20px auto"><h3>Nueva Entrega</h3><div id="gpsStat">📡 Esperando GPS...</div>
+<input id="guia" placeholder="Número de Pedido / Guía">
+<input id="cli" placeholder="Nombre del Receptor / Dirección">
+<p style="font-size:12px;margin-top:8px">📦 Estado de la Entrega:</p>
+<select id="estado">
+  <option value="Entregado">✅ Entregado</option>
+  <option value="Rechazado">❌ Rechazado</option>
+  <option value="No Encontrado">⚠️ Dirección no encontrada</option>
+</select>
+<p style="font-size:12px;margin-top:8px">📸 Foto de Evidencia:</p>
+<input id="fotoFile" type="file" accept="image/*" capture="environment"><div id="infoFoto" style="font-size:11px;color:green"></div><img id="prevFoto" style="width:100%;display:none;border-radius:10px;margin-top:8px"><p style="font-size:12px;margin-top:10px">✍️ Firma de quien recibe:</p><canvas id="firmaCanvas" width="460" height="180" style="border:1px solid #e2e8f0;border-radius:10px;touch-action:none;background:#fff;display:block;width:100%;max-width:100%;margin-top:4px"></canvas><button type="button" onclick="limpiarFirma()" style="background:#e2e8f0;color:#0f172a;margin-top:6px">Borrar firma</button><button onclick="guardar()">Guardar Entrega</button><button onclick="document.getElementById('formVis').style.display='none'" style="background:#e2e8f0;color:#0f172a">Cancelar</button></div></div>
+<script>
+let fotoBase='',lat=7.8897,lng=-72.4967;
+let gpsValido=true;
+let miEmpresaId=null;
+let firmaBase='', dibujando=false, firmaCtx=null;
+
+function initFirma(){
+  const canvas = document.getElementById('firmaCanvas');
+  if(!canvas || firmaCtx) return;
+  firmaCtx = canvas.getContext('2d');
+  firmaCtx.strokeStyle = '#0f172a';
+  firmaCtx.lineWidth = 2.5;
+  firmaCtx.lineCap = 'round';
+  function posDe(e){
+    const rect = canvas.getBoundingClientRect();
+    const px = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const py = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    return { x: px * (canvas.width/rect.width), y: py * (canvas.height/rect.height) };
+  }
+  function empezar(e){ dibujando=true; const p=posDe(e); firmaCtx.beginPath(); firmaCtx.moveTo(p.x,p.y); e.preventDefault(); }
+  function mover(e){ if(!dibujando) return; const p=posDe(e); firmaCtx.lineTo(p.x,p.y); firmaCtx.stroke(); e.preventDefault(); }
+  function terminar(){ if(!dibujando) return; dibujando=false; firmaBase = canvas.toDataURL('image/png'); }
+  canvas.addEventListener('mousedown', empezar);
+  canvas.addEventListener('mousemove', mover);
+  canvas.addEventListener('mouseup', terminar);
+  canvas.addEventListener('touchstart', empezar, {passive:false});
+  canvas.addEventListener('touchmove', mover, {passive:false});
+  canvas.addEventListener('touchend', terminar);
+}
+function limpiarFirma(){
+  const canvas = document.getElementById('firmaCanvas');
+  if(firmaCtx) firmaCtx.clearRect(0,0,canvas.width,canvas.height);
+  firmaBase='';
+}
+
+document.getElementById('fotoFile').addEventListener('change',e=>{
+ const file=e.target.files[0]; if(!file) return;
+ const img=new Image(); img.onload=()=>{
+   const canvas=document.createElement('canvas'); let w=img.width, h=img.height; const max=800; if(w>h){ if(w>max){ h*=max/w; w=max; } } else { if(h>max){ w*=max/h; h=max; } }
+   canvas.width=w; canvas.height=h; canvas.getContext('2d').drawImage(img,0,0,w,h);
+   fotoBase=canvas.toDataURL('image/jpeg',0.6);
+   document.getElementById('prevFoto').src=fotoBase; document.getElementById('prevFoto').style.display='block';
+   document.getElementById('infoFoto').innerText='✅ Foto comprimida: '+(fotoBase.length/1024).toFixed(0)+' KB (antes '+(file.size/1024).toFixed(0)+' KB)';
+ };
+ img.src=URL.createObjectURL(file);
+});
+async function entrar(){
+  const email=document.getElementById('emp').value.trim();
+  const p=document.getElementById('pass').value.trim();
+  const err=document.getElementById('err');
+  err.innerText='';
+  try{
+    const cred = await window.loginFirebase(email, p);
+    const usuarioSnap = await window.getUsuarioDoc(cred.user.uid);
+    if(!usuarioSnap.exists() || !usuarioSnap.data().empresa_id){
+      err.innerText='Tu cuenta no está vinculada a ninguna empresa. Contacta a tu administrador.';
+      await window.logoutFirebase();
+      return;
+    }
+    miEmpresaId = usuarioSnap.data().empresa_id;
+
+    const empresaSnap = await window.getEmpresaDoc(miEmpresaId);
+    if(empresaSnap.exists() && empresaSnap.data().activa === false){
+      err.innerText='Tu empresa fue suspendida. Contacta al proveedor.';
+      await window.logoutFirebase();
+      return;
+    }
+
+    localStorage.setItem('ab_vend', email);
+    localStorage.setItem('ab_empresa', miEmpresaId);
+    mostrarApp();
+  } catch(e){
+    err.innerText='Error: '+e.code;
+    window.registrarError('login', e.code||e.message);
+  }
+}
+function mostrarApp(){document.getElementById('login').style.display='none'; document.getElementById('app').style.display='block'; document.getElementById('info').innerText=localStorage.getItem('ab_vend');}
+async function olvide(){
+  const email = document.getElementById('emp').value.trim();
+  const err = document.getElementById('err');
+  if(!email){ err.style.color='red'; err.innerText='Escribe tu correo arriba primero'; return; }
+  try{
+    await window.recuperarClave(email);
+    err.style.color='green';
+    err.innerText='✅ Te enviamos un correo para restablecer tu clave. Revisa también spam.';
+  }catch(e){
+    err.style.color='red';
+    err.innerText='Error: '+e.code;
+  }
+}
+function salir(){ window.logoutFirebase(); localStorage.clear(); location.reload(); }
+function nueva(){document.getElementById('formVis').style.display='block'; document.getElementById('gpsStat').innerText='📡 Buscando GPS...'; initFirma(); limpiarFirma(); if(navigator.geolocation){navigator.geolocation.getCurrentPosition(pos=>{lat=pos.coords.latitude; lng=pos.coords.longitude; gpsValido=true; document.getElementById('gpsStat').innerText='✅ GPS OK: '+lat.toFixed(5)+','+lng.toFixed(5); document.getElementById('gpsStat').style.background='#dcfce7';},err=>{gpsValido=false;document.getElementById('gpsStat').innerText='❌ SIN GPS REAL - ubicación no confirmada';document.getElementById('gpsStat').style.background='#fecaca';},{enableHighAccuracy:true,timeout:8000});}}
+async function guardar(){
+const guia=document.getElementById('guia').value; 
+const cli=document.getElementById('cli').value; 
+const estado=document.getElementById('estado').value;
+if(!guia){alert('Pon el número de guía/pedido');return;} 
+if(!cli){alert('Pon nombre del receptor');return;} 
+if(!fotoBase){alert('Sube una foto de evidencia');return;} 
+if(!firmaBase){alert('Falta la firma de quien recibe');return;} 
+try{
+  await window.guardarFirebase({
+    empresa_id:localStorage.getItem('ab_empresa'),
+    vendedor:localStorage.getItem('ab_vend'),
+    guia:guia,
+    cliente:cli,
+    estado:estado,
+    foto:fotoBase||'',
+    firma:firmaBase||'',
+    lat:lat,
+    lng:lng,
+    gpsValido:gpsValido,
+    hora:new Date().toLocaleString()
+  }); 
+  alert('¡Entrega Registrada!'); 
+  document.getElementById('formVis').style.display='none'; 
+  document.getElementById('guia').value=''; 
+  document.getElementById('cli').value=''; 
+  document.getElementById('prevFoto').style.display='none'; 
+  document.getElementById('infoFoto').innerText=''; 
+  fotoBase=''; 
+  limpiarFirma();
+}catch(e){alert('Error: '+e.message); window.registrarError('guardar_visita', e.message);}
+}
+if(localStorage.getItem('ab_vend') && localStorage.getItem('ab_empresa')){ miEmpresaId=localStorage.getItem('ab_empresa'); mostrarApp(); }
+</script></body></html>
+
