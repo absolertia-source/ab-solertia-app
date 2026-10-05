@@ -105,7 +105,7 @@ async function archivarYLimpiarAntiguos(){
   snap.forEach(d => datosViejos.push(d.data()));
 
   const datosExcel = datosViejos.map(d=>({
-    Vendedor: d.vendedor, Cliente: d.cliente, Firmado: d.firma ? 'Sí' : 'No',
+    Mensajero: d.vendedor, Guia: d.guia, Estado: d.estado, Cliente: d.cliente, Firmado: d.firma ? 'Sí' : 'No',
     Fecha: d.hora, Latitud: d.lat, Longitud: d.lng,
     Mapa: `https://www.google.com/maps?q=${d.lat},${d.lng}`
   }));
@@ -116,7 +116,7 @@ async function archivarYLimpiarAntiguos(){
 
   for (const d of snap.docs) { await deleteDoc(doc(db,"visitas", d.id)); }
 
-  alert(`📦 Se archivaron ${snap.size} entregas de días anteriores en un Excel que se descargó automáticamente, y se borraron de la base de datos.`);
+  alert(`📦 Se archivaron ${snap.size} entregas de días anteriores en un Excel, y se borraron de la base de datos.`);
 }
 
 window.invitarVendedor = async () => {
@@ -138,7 +138,7 @@ window.invitarVendedor = async () => {
     });
     await signOut(secondaryAuth);
     msg.style.color = 'green';
-    msg.innerText = '✅ Mensajero/vendedor creado: ' + email;
+    msg.innerText = '✅ Mensajero creado: ' + email;
     document.getElementById('vendEmail').value = '';
     document.getElementById('vendPass').value = '';
     cargarVendedores();
@@ -152,11 +152,11 @@ async function cargarVendedores(){
   const snap = await getDocs(query(collection(db,"usuarios"), where("empresa_id","==",miEmpresaId), where("rol","==","vendedor")));
   let html = '';
   snap.forEach(d=>{ html += `<div class="vendedor-item"><span>👤 ${d.data().email}</span><button style="width:auto;padding:4px 10px;background:#dc2626;color:white;border:none;border-radius:8px;font-size:12px;cursor:pointer" onclick="eliminarVendedor('${d.id}','${d.data().email}')">🗑️ Eliminar</button></div>`; });
-  document.getElementById('listaVendedores').innerHTML = html || '<small>Aún no has invitado vendedores</small>';
+  document.getElementById('listaVendedores').innerHTML = html || '<small>Aún no has invitado mensajeros</small>';
 }
 
 window.eliminarVendedor = async (uid, email) => {
-  const confirmar = confirm(`¿Eliminar a ${email}?\n\nSus entregas registradas NO se borran, solo perderá acceso a la app.\n\nEsta acción no se puede deshacer.`);
+  const confirmar = confirm(`¿Eliminar a ${email}?\n\nSus entregas registradas NO se borran, solo perderá acceso a la app.`);
   if(!confirmar) return;
   try {
     await deleteDoc(doc(db, "usuarios", uid));
@@ -191,7 +191,10 @@ function tarjetaVisita(d){
   const firmaHtml = d.firma
     ? `<img class="firma-mini" src="${d.firma}" title="Firma de recibido">`
     : `<div class="firma-mini" style="display:flex;align-items:center;justify-content:center;font-size:10px;color:#dc2626;text-align:center">Sin firma</div>`;
-  return `<div class="visita"><img src="${d.foto||''}"><div style="flex:1"><b>${d.cliente||''}</b> - <span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Ver mapa</a></div>${firmaHtml}</div>`;
+  
+  const estadoColor = d.estado === 'Entregado' ? '#16a34a' : (d.estado === 'Rechazado' ? '#dc2626' : '#ea580c');
+  
+  return `<div class="visita"><img src="${d.foto||''}"><div style="flex:1"><b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span><br><small>👤 ${d.cliente||''}</small><br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Ver mapa</a></div>${firmaHtml}</div>`;
 }
 
 async function cargar(){
@@ -217,7 +220,7 @@ snap.forEach(doc=>{
    const r=porVendedor[v];
    htmlRank+=`<div class="vend-card"><b>👤 ${v}</b><br><small>${r.visitas} entregas</small><br><div style="margin-top:6px"><b style="color:#16a34a">${r.firmadas}</b> <small>con firma</small></div></div>`;
  });
- document.getElementById('ranking').innerHTML=htmlRank||'Aún no hay entregas';
+ document.getElementById('ranking').innerHTML=htmlRank||'Aún no hay entregas hoy';
  document.getElementById('lista').innerHTML=htmlVisitas;
 }
 window.cargar=cargar;
@@ -252,8 +255,10 @@ window.cargarHistorial = async (reset) => {
 window.descargarExcel=()=>{
   if(datosGlobal.length==0){alert('No hay datos');return;}
   const datosExcel = datosGlobal.map(d=>({
-    Vendedor: d.vendedor,
-    Cliente: d.cliente,
+    Mensajero: d.vendedor,
+    Guia: d.guia,
+    Estado: d.estado,
+    Receptor: d.cliente,
     Firmado: d.firma ? 'Sí' : 'No',
     Fecha: d.hora,
     Latitud: d.lat,
@@ -262,12 +267,12 @@ window.descargarExcel=()=>{
   }));
   const ws = XLSX.utils.json_to_sheet(datosExcel);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Visitas");
-  XLSX.writeFile(wb, `TrazaGO_${new Date().toLocaleDateString()}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, "Entregas");
+  XLSX.writeFile(wb, `TrazaGO_Entregas_${new Date().toLocaleDateString()}.xlsx`);
 }
 </script></head><body>
 <div id="loginAdmin" class="login">
-  <h2>TrazaGO</h2><small>Panel Jefe</small><br><br>
+  <h2>TrazaGO</h2><small>Panel Control de Entregas</small><br><br>
   <input id="adminEmail" placeholder="Correo">
   <input id="adminPass" type="password" placeholder="Contraseña">
   <button onclick="entrarAdmin()">Entrar</button>
@@ -276,7 +281,7 @@ window.descargarExcel=()=>{
 </div>
 <div id="panel" style="display:none">
 <div class="top">
- <h3>TrazaGO - Panel Jefe <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3>
+ <h3>TrazaGO - Control de Entregas <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3>
   <div style="display:flex;gap:8px">
     <button class="btn btn-green" onclick="descargarExcel()">📊 Descargar Excel</button>
     <button class="btn btn-white" onclick="cargar()">↻ Actualizar</button>
@@ -289,18 +294,18 @@ window.descargarExcel=()=>{
 </div>
 
 <div class="card">
-  <h4>➕ Invitar vendedor / mensajero</h4>
-  <input id="vendEmail" placeholder="Correo del vendedor o mensajero">
+  <h4>➕ Invitar Mensajero</h4>
+  <input id="vendEmail" placeholder="Correo del mensajero">
   <input id="vendPass" type="password" placeholder="Contraseña (mín. 6 caracteres)">
   <button onclick="invitarVendedor()">Crear acceso</button>
   <p id="vendMsg" style="font-size:13px;margin-top:4px"></p>
   <div id="listaVendedores" style="margin-top:10px"></div>
 </div>
 
-<h4 style="margin:10px 4px">🏆 Ranking por Vendedor</h4>
+<h4 style="margin:10px 4px">🏆 Productividad por Mensajero</h4>
 <div id="ranking" class="rank"></div>
 <div style="display:flex;gap:8px;margin:18px 4px 8px">
-  <button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Hoy</button>
+  <button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Entregas Hoy</button>
   <button id="tabHistorial" class="btn btn-white" style="flex:1" onclick="cambiarTab('historial')">🗂️ Historial</button>
 </div>
 <div id="lista"></div>
