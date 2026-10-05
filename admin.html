@@ -14,6 +14,7 @@ body{background:#f1f5f9;padding:12px}
 .vend-card{background:white;border-radius:14px;padding:12px;box-shadow:0 2px 8px #0001;border-left:5px solid #0f172a}
 .visita{background:white;padding:12px;border-radius:14px;margin:8px 0;display:flex;gap:10px;box-shadow:0 1px 4px #0001}
 .visita img{width:70px;height:70px;object-fit:cover;border-radius:10px}
+.visita .firma-mini{width:70px;height:40px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff}
 .login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px}
 .login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
 .login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px}
@@ -104,7 +105,7 @@ async function archivarYLimpiarAntiguos(){
   snap.forEach(d => datosViejos.push(d.data()));
 
   const datosExcel = datosViejos.map(d=>({
-    Vendedor: d.vendedor, Cliente: d.cliente, Pedido: d.pedido, Cobro: d.cobro,
+    Vendedor: d.vendedor, Cliente: d.cliente, Firmado: d.firma ? 'Sí' : 'No',
     Fecha: d.hora, Latitud: d.lat, Longitud: d.lng,
     Mapa: `https://www.google.com/maps?q=${d.lat},${d.lng}`
   }));
@@ -115,7 +116,7 @@ async function archivarYLimpiarAntiguos(){
 
   for (const d of snap.docs) { await deleteDoc(doc(db,"visitas", d.id)); }
 
-  alert(`📦 Se archivaron ${snap.size} visitas de días anteriores en un Excel que se descargó automáticamente, y se borraron de la base de datos.`);
+  alert(`📦 Se archivaron ${snap.size} entregas de días anteriores en un Excel que se descargó automáticamente, y se borraron de la base de datos.`);
 }
 
 window.invitarVendedor = async () => {
@@ -137,7 +138,7 @@ window.invitarVendedor = async () => {
     });
     await signOut(secondaryAuth);
     msg.style.color = 'green';
-    msg.innerText = '✅ Vendedor creado: ' + email;
+    msg.innerText = '✅ Mensajero/vendedor creado: ' + email;
     document.getElementById('vendEmail').value = '';
     document.getElementById('vendPass').value = '';
     cargarVendedores();
@@ -155,7 +156,7 @@ async function cargarVendedores(){
 }
 
 window.eliminarVendedor = async (uid, email) => {
-  const confirmar = confirm(`¿Eliminar al vendedor ${email}?\n\nSus visitas registradas NO se borran, solo perderá acceso a la app.\n\nEsta acción no se puede deshacer.`);
+  const confirmar = confirm(`¿Eliminar a ${email}?\n\nSus entregas registradas NO se borran, solo perderá acceso a la app.\n\nEsta acción no se puede deshacer.`);
   if(!confirmar) return;
   try {
     await deleteDoc(doc(db, "usuarios", uid));
@@ -186,30 +187,37 @@ window.cambiarTab = (tab) => {
   }
 }
 
+function tarjetaVisita(d){
+  const firmaHtml = d.firma
+    ? `<img class="firma-mini" src="${d.firma}" title="Firma de recibido">`
+    : `<div class="firma-mini" style="display:flex;align-items:center;justify-content:center;font-size:10px;color:#dc2626;text-align:center">Sin firma</div>`;
+  return `<div class="visita"><img src="${d.foto||''}"><div style="flex:1"><b>${d.cliente||''}</b> - <span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Ver mapa</a></div>${firmaHtml}</div>`;
+}
+
 async function cargar(){
  const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
  const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), where("creado",">=",Timestamp.fromDate(inicioHoy))));
- let totalVis=0, totalPed=0, totalCob=0;
+ let totalVis=0, totalFirmadas=0;
  let porVendedor = {}; datosGlobal=[];
  let htmlVisitas='';
 snap.forEach(doc=>{
    const d=doc.data();
    datosGlobal.push(d);
-   totalVis++; totalPed+=Number(d.pedido||0); totalCob+=Number(d.cobro||0);
+   totalVis++; if(d.firma) totalFirmadas++;
    const vend=(d.vendedor||'sin-vendedor').toLowerCase();
-   if(!porVendedor[vend]) porVendedor[vend]={visitas:0,pedidos:0,cobros:0};
-   porVendedor[vend].visitas++; porVendedor[vend].pedidos+=Number(d.pedido||0); porVendedor[vend].cobros+=Number(d.cobro||0);
-   htmlVisitas+=`<div class="visita"><img src="${d.foto||''}"><div><b>${d.cliente||''}</b> - <span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>Ped: $${Number(d.pedido||0).toLocaleString()} | Cob: $${Number(d.cobro||0).toLocaleString()} | ${d.hora||''}</small><br><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Ver mapa</a></div></div>`;
+   if(!porVendedor[vend]) porVendedor[vend]={visitas:0,firmadas:0};
+   porVendedor[vend].visitas++; if(d.firma) porVendedor[vend].firmadas++;
+   htmlVisitas+=tarjetaVisita(d);
  });
  document.getElementById('totalVis').innerText=totalVis;
- document.getElementById('totalPed').innerText='$'+totalPed.toLocaleString();
- document.getElementById('totalCob').innerText='$'+totalCob.toLocaleString();
+ document.getElementById('totalFirmadas').innerText=totalFirmadas;
+ document.getElementById('totalSinFirma').innerText=totalVis-totalFirmadas;
  let htmlRank='';
  Object.keys(porVendedor).sort().forEach(v=>{
    const r=porVendedor[v];
-   htmlRank+=`<div class="vend-card"><b>👤 ${v}</b><br><small>${r.visitas} visitas</small><br><div style="margin-top:6px"><b style="color:#16a34a">$${r.pedidos.toLocaleString()}</b> <small>Pedidos</small></div><div><b style="color:#2563eb">$${r.cobros.toLocaleString()}</b> <small>Cobros</small></div></div>`;
+   htmlRank+=`<div class="vend-card"><b>👤 ${v}</b><br><small>${r.visitas} entregas</small><br><div style="margin-top:6px"><b style="color:#16a34a">${r.firmadas}</b> <small>con firma</small></div></div>`;
  });
- document.getElementById('ranking').innerHTML=htmlRank||'Aún no hay visitas';
+ document.getElementById('ranking').innerHTML=htmlRank||'Aún no hay entregas';
  document.getElementById('lista').innerHTML=htmlVisitas;
 }
 window.cargar=cargar;
@@ -230,8 +238,7 @@ window.cargarHistorial = async (reset) => {
   snap.forEach(doc=>{
     if(idsHistorialCargados.has(doc.id)) return;
     idsHistorialCargados.add(doc.id);
-    const d = doc.data();
-    html += `<div class="visita"><img src="${d.foto||''}"><div><b>${d.cliente||''}</b> - <span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>Ped: $${Number(d.pedido||0).toLocaleString()} | Cob: $${Number(d.cobro||0).toLocaleString()} | ${d.hora||''}</small><br><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Ver mapa</a></div></div>`;
+    html += tarjetaVisita(doc.data());
   });
   document.getElementById('historial').innerHTML += html || (ultimoDocHistorial ? '' : '<p>No hay historial todavía</p>');
   if(!snap.empty){
@@ -247,8 +254,7 @@ window.descargarExcel=()=>{
   const datosExcel = datosGlobal.map(d=>({
     Vendedor: d.vendedor,
     Cliente: d.cliente,
-    Pedido: d.pedido,
-    Cobro: d.cobro,
+    Firmado: d.firma ? 'Sí' : 'No',
     Fecha: d.hora,
     Latitud: d.lat,
     Longitud: d.lng,
@@ -277,16 +283,16 @@ window.descargarExcel=()=>{
   </div>
 </div>
 <div class="stats">
-  <div class="stat"><b id="totalVis">0</b><small>Visitas Totales</small></div>
-  <div class="stat"><b id="totalPed">$0</b><small>Pedidos Totales</small></div>
-  <div class="stat"><b id="totalCob">$0</b><small>Cobros Totales</small></div>
+  <div class="stat"><b id="totalVis">0</b><small>Entregas Totales</small></div>
+  <div class="stat"><b id="totalFirmadas" style="color:#16a34a">0</b><small>Con Firma</small></div>
+  <div class="stat"><b id="totalSinFirma" style="color:#dc2626">0</b><small>Sin Firma</small></div>
 </div>
 
 <div class="card">
-  <h4>➕ Invitar vendedor</h4>
-  <input id="vendEmail" placeholder="Correo del vendedor">
-  <input id="vendPass" type="password" placeholder="Contraseña para el vendedor (mín. 6 caracteres)">
-  <button onclick="invitarVendedor()">Crear vendedor</button>
+  <h4>➕ Invitar vendedor / mensajero</h4>
+  <input id="vendEmail" placeholder="Correo del vendedor o mensajero">
+  <input id="vendPass" type="password" placeholder="Contraseña (mín. 6 caracteres)">
+  <button onclick="invitarVendedor()">Crear acceso</button>
   <p id="vendMsg" style="font-size:13px;margin-top:4px"></p>
   <div id="listaVendedores" style="margin-top:10px"></div>
 </div>
