@@ -139,4 +139,19 @@ window.salir = () => { signOut(auth).then(() => location.reload()); }
     </div>
   </div>
   <div class="stats">
-    <div class="stat"><b id="totalEmp">0</b><small>Empresas</small*
+    <div class="stat"><b id="totalEmp">0</b><small>Empresas</small></div>
+    <div class="stat"><b id="totalVis">0</b><small>Entregas Totales</small></div>
+    <div class="stat"><b id="totalUsu">0</b><small>Usuarios Totales</small></div>
+  </div>
+  <div class="card">
+    <h4>🏢 Crear Nueva Empresa</h4>
+    <input id="empNombre" placeholder="Nombre de la Empresa">
+    <input id="empId" placeholder="ID Único de la Empresa">
+    <button onclick="crearEmpresa()">Registrar Empresa</button>
+  </div>
+  <div class="card">
+    <h4>📋 Gestión de Empresas (Activar / Cancelar)</h4>
+    <div id="listaEmp">Cargando empresas...</div>
+  </div>
+</div>
+</body></html>
