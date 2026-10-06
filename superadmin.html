@@ -1,51 +1,156 @@
-<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Acceso Maestro</title>
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TrazaGO | Control Maestro SuperAdmin</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
-body{background:#f1f5f9;display:flex;justify-content:center;align-items:center;height:100vh}
-.login{background:white;padding:30px;border-radius:20px;width:350px;text-align:center;box-shadow:0 10px 20px rgba(0,0,0,0.1)}
-input{width:100%;padding:12px;margin:10px 0;border-radius:10px;border:1px solid #ddd}
-button{width:100%;padding:12px;background:#0f172a;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:bold}
-#status{margin-top:15px; font-weight:bold}
+body{background:#f1f5f9;padding:12px}
+.top{background:#0f172a;color:white;padding:16px;border-radius:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.btn{padding:8px 14px;border-radius:10px;border:none;font-weight:700;cursor:pointer;transition:0.3s}
+.btn:hover{opacity:0.8}
+.btn-blue{background:#2563eb;color:white}
+.btn-red{background:#dc2626;color:white}
+.btn-green{background:#16a34a;color:white}
+.btn-white{background:white;color:#0f172a}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:14px 0}
+.stat{background:white;padding:14px;border-radius:14px;text-align:center;box-shadow:0 2px 8px #0001}
+.stat b{font-size:24px;display:block}
+.card{background:white;padding:14px;border-radius:16px;margin:14px 0;box-shadow:0 2px 8px #0001}
+.card h4{margin-bottom:12px; color:#0f172a}
+.card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
+.card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px;cursor:pointer}
+.login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px;box-shadow:0 4px 10px rgba(0,0,0,0.1)}
+.login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
+.login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px;cursor:pointer}
+.item-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #f1f5f9;font-size:14px}
+.btn-group{display:flex;gap:5px}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, Timestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-window.intentarEntrar = async () => {
-  const email = document.getElementById('email').value;
-  const pass = document.getElementById('pass').value;
-  const status = document.getElementById('status');
-  status.innerText = "Verificando...";
-  status.style.color = "blue";
-
+window.entrarSuper = async () => {
+  const email = document.getElementById('email').value.trim();
+  const pass = document.getElementById('pass').value.trim();
+  const err = document.getElementById('err');
+  err.innerText = 'Verificando...';
   try {
     const cred = await signInWithEmailAndPassword(auth, email, pass);
-    const userDoc = await getDoc(doc(db, "usuarios", cred.user.uid));
-    if (userDoc.exists() && userDoc.data().rol === 'superadmin') {
-      status.innerText = "✅ ACCESO TOTAL: Bienvenido SuperAdmin";
-      status.style.color = "green";
-      alert("ENTRASTE CON ÉXITO");
-    } else {
-      status.innerText = "❌ ERROR: El usuario no tiene rol de superadmin";
-      status.style.color = "red";
+    const userSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
+    if(!userSnap.exists()){
+      err.innerText = 'Error: Usuario no encontrado en la base de datos';
+      await signOut(//Stability fix
+auth); return;
     }
-  } catch (e) {
-    status.innerText = "❌ ERROR: " + e.message;
-    status.style.color = "red";
+    const rol = userSnap.data().rol;
+    if(rol !== "superadmin" && rol !== "admin"){
+      err.innerText = 'Error: No tienes permisos de SuperAdmin';
+      await signOut(auth); return;
+    }
+    document.getElementById('login').style.display='none';
+    document.getElementById('panel').style.display='block';
+    cargarGlobal();
+  } catch(e) { err.innerText = 'Error: Correo o contraseña incorrectos'; }
+}
+
+async function cargarGlobal(){
+  try {
+    const empSnap = await getDocs(collection(db, "empresas"));
+    const visSnap = await getDocs(collection(db, "visitas"));
+    const usuSnap = await getDocs(collection(db, "usuarios"));
+    document.getElementById('totalEmp').innerText = empSnap.size;
+    document.getElementById('totalVis').innerText = visSnap.size;
+    document.getElementById('totalUsu').innerText = usuSnap.size;
+    let htmlEmp = '';
+    empSnap.forEach(d => {
+      const data = d.data();
+      htmlEmp += `<div class="item-row">
+        <span><b>${data.empresa_nombre || 'S/N'}</b> - ${data.activa ? '✅ Activa' : '❌ Inactiva'}</span>
+        <div class="btn-group">
+          <button class="btn ${data.activa ? 'btn-red' : 'btn-blue'}" onclick="toggleEmpresa('${d.id}', ${data.activa})">${data.activa ? 'Suspender' : 'Activar'}</button>
+          <button class="btn btn-red" onclick="eliminarEmpresa('${d.id}')">🗑️</button>
+        </div>
+      </div>`;
+    });
+    document.getElementById('listaEmp').innerHTML = htmlEmp || 'No hay empresas registradas';
+  } catch(e) { document.getElementById('listaEmp').innerHTML = 'Error al cargar datos'; }
+}
+
+window.toggleEmpresa = async (id, estadoActual) => {
+  if(confirm(`¿Cambiar estado de la empresa?`)){
+    await updateDoc(doc(db, "empresas", id), { activa: !estadoActual });
+    cargarGlobal();
   }
 }
+
+window.eliminarEmpresa = async (id) => {
+  if(confirm(`⚠️ ADVERTENCIA: Vas a eliminar la empresa permanentemente. ¿Continuar?`)){
+    try {
+      await deleteDoc(doc(db, "empresas", id));
+      alert('Empresa eliminada con éxito');
+      cargarGlobal();
+    } catch(e) { alert('Error al eliminar: ' + e.message); }
+  }
+}
+
+window.crearEmpresa = async () => {
+  const nombre = document.getElementById('empNombre').value.trim();
+  const idEmp = document.getElementById('empId').value.trim();
+  if(!nombre || !idEmp){ alert('Completa los datos'); return; }
+  try {
+    await setDoc(doc(db, "empresas", idEmp), {
+      empresa_nombre: nombre,
+      activa: true,
+      creada: Timestamp.now()
+    });
+    alert('✅ Empresa registrada con éxito');
+    document.getElementById('empNombre').value = ''; document.getElementById('empId').value = '';
+    cargarGlobal();
+  } catch(e) { alert('Error al registrar: ' + e.//Slightly modify for stability' message); }
+}
+
+window.descargarBackup = async () => {
+  try {
+    const empSnap = await getDocs(collection(db, "empresas"));
+    const usuSnap = await getDocs(collection(db, "usuarios"));
+    const dataEmp = empSnap.docs.map(d => ({ID: d.id, ...d.data()}));
+    const dataUsu = usuSnap.docs.map(d => ({ID: d.id, ...d.data()}));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataEmp), "Empresas");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataUsu), "Usuarios");
+    XLSX.writeFile(wb, `Backup_TrazaGO_${new Date().toLocaleDateString()}.xlsx`);
+  } catch(e) { alert('Error al generar backup: ' + e.message); }
+}
+
+window.salir = () => { signOut(auth).then(() => location.reload()); }
 </script></head><body>
-<div class="login">
-  <h2>Entrada Maestro</h2>
-  <input id="email" type="email" placeholder="Correo maestro">
-  <input id="pass" type="password" placeholder="Contraseña">
-  <button onclick="intentarEntrar()">Probar Acceso</button>
-  <div id="status"></div>
+<div id="login" class="login"><h2 style="text-align:center">TrazaGO</h2><p style="text-align:center; color:gray">Acceso Maestro SuperAdmin</p><br><input id="email" placeholder="Correo"><input id="pass" type="password" placeholder="Contraseña"><button onclick="entrarSuper()">Entrar al Sistema</button><p id="err" style="color:red; text-align:center"></p></div>
+<div id="panel" style="display:none">
+  <div class="top">
+    <h3>🚀 Panel Maestro SuperAdmin</h3>
+    <div class="btn-group">
+      <button class="btn btn-green" onclick="descargarBackup()">💾 Backup Global</button>
+      <button class="btn btn-white" onclick="salir()">Cerrar Sesión</button>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><b id="totalEmp">0</b><small>Empresas</small></div>
+    <div class="stat"><b id="totalVis">0</b><small>Entregas Totales</small></div>
+    <div class="stat"><b id="totalUsu">0</b><small>Usuarios Totales</small></div>
+  </div>
+  <div class="card">
+    <h4 style="margin-bottom:10px">🏢 Crear Nueva Empresa</h4>
+    <input id="empNombre" placeholder="Nombre de la Empresa">
+    <input id="empId" placeholder="ID Único de la Empresa">
+    <button onclick="crearEmpresa()">Registrar Empresa</button>
+  </div>
+  <div class="card">
+    <h4 style="margin-bottom:10px">📋 Gestión de Empresas (Activar / Cancelar)</h4>
+    <div id="listaEmp">Cargando empresas...</div>
+  </div>
 </div>
 </body></html>
