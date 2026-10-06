@@ -18,17 +18,17 @@ body{background:#f1f5f9;padding:12px}
 .visita .firma-mini{width:70px;height:40px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff}
 .login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px}
 .login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
-.login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px}
+.login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px;cursor:pointer}
 .card{background:white;padding:14px;border-radius:16px;margin:14px 0}
 .card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
-.card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px}
+.card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px;cursor:pointer}
 .vendedor-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
 .search-box{width:100%;padding:12px;border-radius:10px;border:2px solid #0f172a;margin:10px 0;font-size:16px}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, getDoc, setDoc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, setPersistence, inMemoryPersistence, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
 const app = initializeApp(firebaseConfig);
@@ -46,12 +46,17 @@ window.entrarAdmin = async () => {
   const email = document.getElementById('adminEmail').value.trim();
   const pass = document.getElementById('adminPass').value.trim();
   const err = document.getElementById('adminErr');
-  err.innerText = '';
+  err.innerText = 'Verificando...';
   try {
     const cred = await signInWithEmailAndPassword(auth, email, pass);
     const usuarioSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
-    if(!usuarioSnap.exists() || usuarioSnap.data().rol !== "admin"){
-      err.innerText = 'Acceso denegado: Rol incorrecto';
+    if(!usuarioSnap.exists()){
+      err.innerText = 'Usuario no encontrado en la base de datos';
+      await signOut(auth); return;
+    }
+    const rol = usuarioSnap.data().rol;
+    if(rol !== "admin" && rol !== "superadmin"){
+      err.innerText = 'Acceso denegado: No eres administrador';
       await signOut(auth); return;
     }
     miEmpresaId = usuarioSnap.data().empresa_id;
@@ -59,7 +64,7 @@ window.entrarAdmin = async () => {
     document.getElementById('loginAdmin').style.display='none';
     document.getElementById('panel').style.display='block';
     cargar(); cargarVendedores(); cargarHistorial(true); cambiarTab('hoy');
-  } catch(e) { err.innerText='Error: '+e.code; }
+  } catch(e) { err.innerText='Error: Correo o contraseña incorrectos'; }
 }
 
 window.invitarVendedor = async () => {
@@ -154,9 +159,9 @@ window.descargarExcel=()=>{
 async function cargarHistorial(reset){
   if(reset) document.getElementById('historial').innerHTML='';
   const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), limit(50)));
-  let html = ''; snap.forEach((doc, i) => { html += tarjetaVisita(doc.data(), i); });
+  let html = ''; snap.forEach((doc, i) => { html += tarjetaVisita(doc.//CORTADO POR ESPACIO’ data(), i); });
   document.getElementById('historial').innerHTML = html;
 }
 </script></head><body>
-<div id="loginAdmin" class="login"><h2>TrazaGO</h2><small>Panel Control de Entregas</small><br><br><input id="adminEmail" placeholder="Correo"><input id="adminPass" type="password" placeholder="Contraseña"><button onclick="entrarAdmin()">Entrar</button><p id="adminErr" style="color:red"></p></div>
-<div id="panel" style="display:none"><div class="top"><h3>TrazaGO - Control <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3><div style="display:flex;gap:8px"><button class="btn btn-green" onclick="descargarExcel()">📊 Excel</button><button class="btn btn-white" onclick="cargar()">↻ Actualizar</button></div></div><div class="stats"><div class="stat"><b id="totalVis">0</b><small>Totales</small></div><div class="stat"><b id="totalFirmadas" style="color:#16a34a">0</b><small>Con Firma</small></div><div class="stat"><b id="totalSinFirma" style="color:#dc2626">0</b><small>Sin Firma</small></div></div><div class="card"><h4>🔍 Buscar Entrega</h4><input id="searchGuia" class="search-box" placeholder="Escribe el número de guía..." oninput="filtrarEntregas()"></div><div class="card"><h4>➕ Invitar Mensajero</h4><input id="vendEmail" placeholder="Correo"><input id="vendPass" type="password" placeholder="Clave"><button onclick="invitarVendedor()">Crear acceso</button><div id="listaVendedores" style="margin-top:10px"></div></div><h4 style="margin:10px 4px">🏆 Productividad</h4><div id="ranking" class="rank"></div><div style="display:flex;gap:8px;margin:18px 4px 8px"><button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Hoy</button><button id="tabHistorial" class="btn btn-white" style="flex:1" onclick="cambiarTab('historial')">🗂️ Historial</button></div><div id="lista"></div><div id="historial" style="display:none"></div></div></body></html>
+<div id="loginAdmin" class="login"><h2 style="text-align:center">TrazaGO</h2><p style="text-align:center; color:gray">Acceso Jefe de Empresa</p><br><input id="adminEmail" placeholder="Correo"><input id="adminPass" type="password" placeholder="Contraseña"><button onclick="entrarAdmin()">Entrar al Panel</button><p id="adminErr" style="color:red; text-align:center"></p></div>
+<div id="panel" style="display:none"><div class="top"><h3>TrazaGO - Control <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3><div style="display:flex;gap:8px"><button class="btn btn-green" onclick="descargarExcel()">📊 Excel</button><button class="btn btn-white" onclick="cargar()">↻ Actualizar</button></div></div><div class="stats"><div class="stat"><b id="totalVis">0</b><small>Totales</small></div><div class="stat"><b id="totalFirmadas" style="color:#16a34a">0</b><small>Con Firma</small></div><div class="stat"><b id="totalSinFirma" style="color:#dc2626">0</b><small>Sin Firma</small></div></div><div class="card"><h4>🔍 Buscar Entrega</h4><input id="searchGuia" class="search-box" placeholder="Escribe la guía o cliente..." oninput="filtrarEntregas()"></div><div class="card"><h4>➕ Invitar Mensajero</h4><input id="vendEmail" placeholder="Correo"><input id="vendPass" type="password" placeholder="Clave"><button onclick="invitarVendedor()">Crear acceso</button><div id="listaVendedores" style="margin-top:10px"></div></div><h4 style="margin:10px 4px">🏆 Productividad</h4><div id="ranking" class="rank"></div><div style="display:flex;gap:8px;margin:18px 4px 8px"><button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Hoy</button><button id="tabHistorial" class="btn btn-white" style="flex:1" onclick="cambiarTab('historial')">🗂️ Historial</button></div><div id="lista"></div><div id="historial" style="display:none"></div></div></body></html>
