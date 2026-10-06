@@ -1,119 +1,56 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TrazaGO | Panel Global SuperAdmin</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Acceso Emergencia SuperAdmin</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
-body{background:#f1f5f9;padding:12px}
-.top{background:#0f172a;color:white;padding:16px;border-radius:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
-.btn{padding:8px 14px;border-radius:10px;border:none;font-weight:700;cursor:pointer}
-.btn-blue{background:#2563eb;color:white}
-.btn-red{background:#dc2626;color:white}
-.btn-white{background:white;color:#0f172a}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:14px 0}
-.stat{background:white;padding:14px;border-radius:14px;text-align:center;box-shadow:0 2px 8px #0001}
-.stat b{font-size:24px;display:block}
-.card{background:white;padding:14px;border-radius:16px;margin:14px 0;box-shadow:0 2px 8px #0001}
-.card input, .card select{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
-.card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px;cursor:pointer}
-.login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px}
-.login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
-.login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px;cursor:pointer}
-.item-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #f1f5f9;font-size:14px}
+body{background:#f1f5f9;display:flex;justify-content:center;align-items:center;height:100vh}
+.login{background:white;padding:30px;border-radius:20px;width:350px;text-align:center;box-shadow:0 10px 20px rgba(0,0,0,0.1)}
+input{width:100%;padding:12px;margin:10px 0;border-radius:10px;border:1px solid #ddd}
+button{width:100%;padding:12px;background:#0f172a;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:bold}
+#status{margin-top:15px; font-weight:bold; font-size:14px}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-window.entrarSuper = async () => {
-  const email = document.getElementById('email').value.trim();
-  const pass = document.getElementById('pass').value.trim();
-  const err = document.getElementById('err');
-  err.innerText = 'Verificando...';
+window.intentarEntrar = async () => {
+  const email = document.getElementById('email').value;
+  const pass = document.getElementById('pass').value;
+  const status = document.getElementById('status');
+  status.innerText = "Verificando...";
+  status.style.color = "blue";
+
   try {
+    // PASO 1: LOGIN
     const cred = await signInWithEmailAndPassword(auth, email, pass);
-    const userSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
-    if(!userSnap.exists() || (userSnap.data().rol !== "superadmin" && userSnap.data().rol !== "admin")){
-      err.innerText = 'No tienes permisos de superadministrador';
-      await signOut(auth); return;
+    status.innerText = "✅ Login Correcto. Verificando Rol...";
+    
+    // PASO 2: ROL
+    const userDoc = await getDoc(doc(db, "usuarios", cred.user.uid));
+    if (userDoc.exists()) {
+      const rol = userDoc.data().rol;
+      status.innerText = "✅ ACCESO TOTAL. Tu rol es: " + rol;
+      status.style.color = "green";
+      alert("SISTEMA OPERATIVO: Ya puedes entrar al panel");
+    } else {
+      status.innerText = "❌ Error: Usuario autenticado pero no existe en la tabla 'usuarios'";
+      status.style.color = "red";
     }
-    document.getElementById('login').style.display='none';
-    document.getElementById('panel').style.display='block';
-    cargarGlobal();
-  } catch(e) { err.innerText = 'Error: Correo o contraseña incorrectos'; }
-}
-
-async function cargarGlobal(){
-  try {
-    const empSnap = await getDocs(collection(db, "empresas"));
-    const visSnap = await getDocs(collection(db, "visitas"));
-    const usuSnap = await getDocs(collection(db, "usuarios"));
-    
-    document.getElementById('totalEmp').innerText = empSnap.size;
-    document.getElementById('totalVis').innerText = visSnap.size;
-    document.getElementById('totalUsu').innerText = usuSnap.size;
-    
-    let htmlEmp = '';
-    empSnap.forEach(d => {
-      const data = d.data();
-      htmlEmp += `<div class="item-row">
-        <span><b>${data.empresa_nombre || 'S/N'}</b> - ${data.activa ? '✅ Activa' : '❌ Inactiva'}</span>
-        <button class="btn ${data.activa ? 'btn-red' : 'btn-blue'}" onclick="toggleEmpresa('${d.id}', ${data.activa})">
-          ${data.activa ? 'Suspender' : 'Activar'}
-        </button>
-      </div>`;
-    });
-    document.getElementById('listaEmp').innerHTML = htmlEmp || 'No hay empresas registradas';
-  } catch(e) {
-    console.error(e);
-    document.getElementById('listaEmp').innerHTML = 'Error al cargar datos';
+  } catch (e) {
+    status.innerText = "❌ Error de acceso: " + e.message;
+    status.style.color = "red";
   }
 }
-
-window.toggleEmpresa = async (id, estadoActual) => {
-  if(confirm(`¿Estás seguro de cambiar el estado de la empresa?`)){
-    try {
-      await updateDoc(doc(db, "empresas", id), { activa: !estadoActual });
-      cargarGlobal();
-    } catch(e) { alert('Error al actualizar: ' + e.message); }
-  }
-}
-
-window.crearEmpresa = async () => {
-  const nombre = document.getElementById('empNombre').value.trim();
-  const idEmp = document.getElementById('empId').value.trim();
-  if(!nombre || !idEmp){ alert('Completa los datos de la empresa'); return; }
-  try {
-    await setDoc(doc(db, "empresas", idEmp), {
-      empresa_nombre: nombre,
-      activa: true,
-      creada: Timestamp.now()
-    });
-    alert('✅ Empresa creada con éxito');
-    document.getElementById('empNombre').value = '';
-    document.getElementById('empId').value = '';
-    cargarGlobal();
-  } catch(e) { alert('Error al crear empresa: ' + e.message); }
-}
-
-window.salir = () => { signOut(auth).then(() => location.reload()); }
 </script></head><body>
-<div id="login" class="login"><h2 style="text-align:center">TrazaGO</h2><p style="text-align:center; color:gray">Acceso Super Admin</p><br><input id="email" placeholder="Correo"><input id="pass" type="password" placeholder="Contraseña"><button onclick="entrarSuper()">Entrar al Sistema</button><p id="err" style="color:red; text-align:center"></p></div>
-<div id="panel" style="display:none">
-  <div class="top">
-    <h3>🚀 Panel Global SuperAdmin</h3>
-    <button class="btn btn-white" onclick="salir()">Cerrar Sesión</button>
-  </div>
-  <div class="stats">
-    <div class="stat"><b id="totalEmp">0</b><small>Empresas</small></div>
-    <div class="stat"><b id="totalVis">0</b><small>Entregas Totales</small></div>
-    <div class="stat"><b id="totalUsu">0</b><small>Usuarios Totales</small></div>
-  </div>
-  <div class="card">
-    <h4 style="margin-bottom:10px">🏢 Crear Nueva Empresa</h4>
-    <input id="empNombre" placeholder="Nombre de la Empresa (Ej: Transportes Express)">
-    <input id="empId" placeholder="ID Único de la Empresa (Ej: transp*
+<div class="login">
+  <h2>Entrada de Emergencia</h2>
+  <input id="email" type="email" placeholder="Correo">
+  <input id="pass" type="password" placeholder="Contraseña">
+  <button onclick="intentarEntrar()">Probar Acceso</button>
+  <div id="status"></div>
+</div>
+</body></html>
