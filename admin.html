@@ -1,4 +1,4 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Panel Jefe - TrazaGO</title>
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TrazaGO | Panel Jefe</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
@@ -11,19 +11,17 @@ body{background:#f1f5f9;padding:12px}
 .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0}
 .stat{background:white;padding:14px;border-radius:14px;text-align:center;box-shadow:0 2px 8px #0001}
 .stat b{font-size:22px;display:block}
-.rank{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0}
-.vend-card{background:white;border-radius:14px;padding:12px;box-shadow:0 2px 8px #0001;border-left:5px solid #0f172a}
-.visita{background:white;padding:12px;border-radius:14px;margin:8px 0;display:flex;gap:10px;box-shadow:0 1px 4px #0001}
-.visita img{width:70px;height:70px;object-fit:cover;border-radius:10px}
-.visita .firma-mini{width:70px;height:40px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff}
-.login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px}
-.login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
-.login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px;cursor:pointer}
-.card{background:white;padding:14px;border-radius:16px;margin:14px 0}
+.card{background:white;padding:14px;border-radius:16px;margin:14px 0;box-shadow:0 2px 8px #0001}
 .card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
 .card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px;cursor:pointer}
+.login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px;box-shadow:0 4px 10px rgba(0,0,0,0.1)}
+.login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
+.login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px;cursor:pointer}
 .vendedor-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
 .search-box{width:100%;padding:12px;border-radius:10px;border:2px solid #0f172a;margin:10px 0;font-size:16px}
+.visita{background:white;padding:12px;border-radius:14px;margin:8px 0;display:flex;gap:10px;box-shadow:0 1px 4px #0001}
+.visita img{width:70px;height:70px;object-fit:cover;border-radius:10px}
+.firma-mini{width:70px;height:40px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -49,28 +47,28 @@ window.entrarAdmin = async () => {
   err.innerText = 'Verificando...';
   try {
     const cred = await signInWithEmailAndPassword(auth, email, pass);
-    const usuarioSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
-    if(!usuarioSnap.exists()){
-      err.innerText = 'Usuario no encontrado en la base de datos';
+    const userSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
+    if(!userSnap.exists()){
+      err.innerText = 'Error: Usuario no encontrado en la base de datos';
       await signOut(auth); return;
     }
-    const rol = usuarioSnap.data().rol;
+    const rol = userSnap.data().rol;
     if(rol !== "admin" && rol !== "superadmin"){
-      err.innerText = 'Acceso denegado: No eres administrador';
+      err.innerText = 'Error: No tienes permisos de administrador';
       await signOut(auth); return;
     }
-    miEmpresaId = usuarioSnap.data().empresa_id;
-    document.getElementById('nombreEmpresaTop').innerText = usuarioSnap.data().empresa_nombre || '';
+    miEmpresaId = userSnap.data().empresa_id;
+    document.getElementById('nombreEmpresaTop').innerText = userSnap.data().empresa_nombre || '';
     document.getElementById('loginAdmin').style.display='none';
     document.getElementById('panel').style.display='block';
-    cargar(); cargarVendedores(); cargarHistorial(true); cambiarTab('hoy');
+    await cargar(); await cargarVendedores(); await cargarHistorial(true); cambiarTab('hoy');
   } catch(e) { err.innerText='Error: Correo o contraseña incorrectos'; }
 }
 
 window.invitarVendedor = async () => {
   const email = document.getElementById('vendEmail').value.trim();
   const pass = document.getElementById('vendPass').value.trim();
-  if(!email || !pass){ alert('Completa datos'); return; }
+  if(!email || !pass){ alert('Completa los datos'); return; }
   try {
     const cred = await createUserWithEmailAndPassword(secondaryAuth, email, pass);
     await setDoc(doc(db, "usuarios", cred.user.uid), { email, empresa_id: miEmpresaId, rol: "vendedor" });
@@ -83,11 +81,11 @@ async function cargarVendedores(){
   const snap = await getDocs(query(collection(db,"usuarios"), where("empresa_id","==",miEmpresaId), where("rol","==","vendedor")));
   let html = '';
   snap.forEach(d=>{ html += `<div class="vendedor-item"><span>👤 ${d.data().email}</span><button style="width:auto;padding:4px 10px;background:#dc2626;color:white;border:none;border-radius:8px;font-size:12px;cursor:pointer" onclick="eliminarVendedor('${d.id}','${d.data().email}')">🗑️</button></div>`; });
-  document.getElementById('listaVendedores').innerHTML = html;
+  document.getElementById('listaVendedores').innerHTML = html || 'No hay mensajeros';
 }
 
 window.eliminarVendedor = async (uid, email) => {
-  if(confirm(`¿Eliminar ${email}?`)){ await deleteDoc(doc(db, "usuarios", uid)); cargarVendedores(); }
+  if(confirm(`¿Eliminar a ${email}?`)){ await deleteDoc(doc(db, "usuarios", uid)); cargarVendedores(); }
 }
 
 window.cambiarTab = (tab) => {
@@ -123,10 +121,9 @@ async function cargar(){
    const r=porVendedor[v];
    htmlRank+=`<div class="vend-card"><b>👤 ${v}</b><br><small>${r.visitas} entregas</small></div>`;
  });
- document.getElementById('ranking').innerHTML=htmlRank;
- document.getElementById('lista').innerHTML=htmlVisitas;
+ document.getElementById('ranking').innerHTML=htmlRank || 'No hay datos';
+ document.getElementById('lista').innerHTML=htmlVisitas || 'No hay entregas hoy';
 }
-window.cargar=cargar;
 
 window.filtrarEntregas = () => {
   const texto = document.getElementById('searchGuia').value.toLowerCase();
@@ -159,8 +156,8 @@ window.descargarExcel=()=>{
 async function cargarHistorial(reset){
   if(reset) document.getElementById('historial').innerHTML='';
   const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), limit(50)));
-  let html = ''; snap.forEach((doc, i) => { html += tarjetaVisita(doc.//CORTADO POR ESPACIO’ data(), i); });
-  document.getElementById('historial').innerHTML = html;
+  let html = ''; snap.forEach((doc, i) => { html += tarjetaVisita(doc.data(), i); });
+  document.getElementById('historial').innerHTML = html || 'No hay historial';
 }
 </script></head><body>
 <div id="loginAdmin" class="login"><h2 style="text-align:center">TrazaGO</h2><p style="text-align:center; color:gray">Acceso Jefe de Empresa</p><br><input id="adminEmail" placeholder="Correo"><input id="adminPass" type="password" placeholder="Contraseña"><button onclick="entrarAdmin()">Entrar al Panel</button><p id="adminErr" style="color:red; text-align:center"></p></div>
