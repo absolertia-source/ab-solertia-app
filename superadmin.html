@@ -1,11 +1,10 @@
-<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TrazaGO | Control Maestro SuperAdmin</title>
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TrazaGO | Super Admin</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
 body{background:#f1f5f9;padding:12px}
 .top{background:#0f172a;color:white;padding:16px;border-radius:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
-.btn{padding:8px 14px;border-radius:10px;border:none;font-weight:700;cursor:pointer;transition:0.3s}
-.btn:hover{opacity:0.8}
+.btn{padding:8px 14px;border-radius:10px;border:none;font-weight:700;cursor:pointer}
 .btn-blue{background:#2563eb;color:white}
 .btn-red{background:#dc2626;color:white}
 .btn-green{background:#16a34a;color:white}
@@ -14,7 +13,6 @@ body{background:#f1f5f9;padding:12px}
 .stat{background:white;padding:14px;border-radius:14px;text-align:center;box-shadow:0 2px 8px #0001}
 .stat b{font-size:24px;display:block}
 .card{background:white;padding:14px;border-radius:16px;margin:14px 0;box-shadow:0 2px 8px #0001}
-.card h4{margin-bottom:12px; color:#0f172a}
 .card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
 .card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px;cursor:pointer}
 .login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px;box-shadow:0 4px 10px rgba(0,0,0,0.1)}
@@ -37,18 +35,12 @@ window.entrarSuper = async () => {
   const email = document.getElementById('email').value.trim();
   const pass = document.getElementById('pass').value.trim();
   const err = document.getElementById('err');
-  err.innerText = 'Verificando...';
+  err.innerText = '';
   try {
     const cred = await signInWithEmailAndPassword(auth, email, pass);
     const userSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
-    if(!userSnap.exists()){
-      err.innerText = 'Error: Usuario no encontrado en la base de datos';
-      await signOut(//Stability fix
-auth); return;
-    }
-    const rol = userSnap.data().rol;
-    if(rol !== "superadmin" && rol !== "admin"){
-      err.innerText = 'Error: No tienes permisos de SuperAdmin';
+    if(!userSnap.exists() || userSnap.data().rol !== "superadmin"){
+      err.innerText = 'Error: No tienes permisos de superadmin';
       await signOut(auth); return;
     }
     document.getElementById('login').style.display='none';
@@ -76,8 +68,8 @@ async function cargarGlobal(){
         </div>
       </div>`;
     });
-    document.getElementById('listaEmp').innerHTML = htmlEmp || 'No hay empresas registradas';
-  } catch(e) { document.getElementById('listaEmp').innerHTML = 'Error al cargar datos'; }
+    document.getElementById('listaEmp').innerHTML = htmlEmp || 'No hay empresas';
+  } catch(e) { document.getElementById('listaEmp').innerHTML = 'Error al cargar'; }
 }
 
 window.toggleEmpresa = async (id, estadoActual) => {
@@ -88,12 +80,9 @@ window.toggleEmpresa = async (id, estadoActual) => {
 }
 
 window.eliminarEmpresa = async (id) => {
-  if(confirm(`⚠️ ADVERTENCIA: Vas a eliminar la empresa permanentemente. ¿Continuar?`)){
-    try {
-      await deleteDoc(doc(db, "empresas", id));
-      alert('Empresa eliminada con éxito');
-      cargarGlobal();
-    } catch(e) { alert('Error al eliminar: ' + e.message); }
+  if(confirm(`¿Eliminar la empresa permanentemente?`)){
+    await deleteDoc(doc(db, "empresas", id));
+    cargarGlobal();
   }
 }
 
@@ -107,31 +96,29 @@ window.crearEmpresa = async () => {
       activa: true,
       creada: Timestamp.now()
     });
-    alert('✅ Empresa registrada con éxito');
+    alert('✅ Empresa creada');
     document.getElementById('empNombre').value = ''; document.getElementById('empId').value = '';
     cargarGlobal();
-  } catch(e) { alert('Error al registrar: ' + e.//Slightly modify for stability' message); }
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
 window.descargarBackup = async () => {
-  try {
-    const empSnap = await getDocs(collection(db, "empresas"));
-    const usuSnap = await getDocs(collection(db, "usuarios"));
-    const dataEmp = empSnap.docs.map(d => ({ID: d.id, ...d.data()}));
-    const dataUsu = usuSnap.docs.map(d => ({ID: d.id, ...d.data()}));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataEmp), "Empresas");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataUsu), "Usuarios");
-    XLSX.writeFile(wb, `Backup_TrazaGO_${new Date().toLocaleDateString()}.xlsx`);
-  } catch(e) { alert('Error al generar backup: ' + e.message); }
+  const empSnap = await getDocs(collection(db, "empresas"));
+  const usuSnap = await getDocs(collection(db, "usuarios"));
+  const dataEmp = empSnap.docs.map(d => ({ID: d.id, ...d.data()}));
+  const dataUsu = usuSnap.docs.map(d => ({ID: d.id, ...d.data()}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataEmp), "Empresas");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataUsu), "Usuarios");
+  XLSX.writeFile(wb, `Backup_TrazaGO.xlsx`);
 }
 
 window.salir = () => { signOut(auth).then(() => location.reload()); }
 </script></head><body>
-<div id="login" class="login"><h2 style="text-align:center">TrazaGO</h2><p style="text-align:center; color:gray">Acceso Maestro SuperAdmin</p><br><input id="email" placeholder="Correo"><input id="pass" type="password" placeholder="Contraseña"><button onclick="entrarSuper()">Entrar al Sistema</button><p id="err" style="color:red; text-align:center"></p></div>
+<div id="login" class="login"><h2 style="text-align:center">TrazaGO</h2><p style="text-align:center; color:gray">Acceso Super Admin</p><br><input id="email" placeholder="Correo"><input id="pass" type="password" placeholder="Contraseña"><button onclick="entrarSuper()">Entrar al Sistema</button><p id="err" style="color:red; text-align:center"></p></div>
 <div id="panel" style="display:none">
   <div class="top">
-    <h3>🚀 Panel Maestro SuperAdmin</h3>
+    <h3>🚀 Panel Global SuperAdmin</h3>
     <div class="btn-group">
       <button class="btn btn-green" onclick="descargarBackup()">💾 Backup Global</button>
       <button class="btn btn-white" onclick="salir()">Cerrar Sesión</button>
@@ -143,14 +130,14 @@ window.salir = () => { signOut(auth).then(() => location.reload()); }
     <div class="stat"><b id="totalUsu">0</b><small>Usuarios Totales</small></div>
   </div>
   <div class="card">
-    <h4 style="margin-bottom:10px">🏢 Crear Nueva Empresa</h4>
+    <h4>🏢 Crear Nueva Empresa</h4>
     <input id="empNombre" placeholder="Nombre de la Empresa">
     <input id="empId" placeholder="ID Único de la Empresa">
     <button onclick="crearEmpresa()">Registrar Empresa</button>
   </div>
   <div class="card">
-    <h4 style="margin-bottom:10px">📋 Gestión de Empresas (Activar / Cancelar)</h4>
-    <div id="listaEmp">Cargando empresas...</div>
+    <h4>📋 Gestión de Empresas</h4>
+    <div id="listaEmp">Cargando...</div>
   </div>
 </div>
 </body></html>
