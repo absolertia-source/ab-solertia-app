@@ -11,9 +11,9 @@ body{background:#f1f5f9;padding:12px}
 .stat{background:white;padding:14px;border-radius:14px;text-align:center;box-shadow:0 2px 8px #0001}
 .stat b{font-size:24px;display:block}
 .card{background:white;padding:14px;border-radius:16px;margin:14px 0;box-shadow:0 2px 8px #0001}
-.card input, .card select{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
+.card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
 .card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px;cursor:pointer}
-.login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px;box-shadow:0 4px 10px rgba(0,0,0,0.1)}
+.login{max-width:360px;margin:60px auto;background:white;padding:24px;border-//CORTADO’ radius:20px;box-shadow:0 4px 10px rgba(0,0,0,0.1)}
 .login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
 .login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px;cursor:pointer}
 .item-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #f1f5f9;font-size:14px}
@@ -36,15 +36,9 @@ window.entrarSuper = async () => {
   try {
     const cred = await signInWithEmailAndPassword(auth, email, pass);
     const userSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
-    if(!userSnap.exists()){
-      err.innerText = 'Error: Usuario no encontrado en la base de datos';
+    if(!userSnap.exists() || (userSnap.data().rol !== "superadmin" && userSnap.data().rol !== "admin")){
+      err.innerText = 'No tienes permisos de superadministrador';
       await signOut(auth); return;
-    }
-    const rol = userSnap.data().rol;
-    if(rol !== "superadmin" && rol !== "admin"){
-      err.innerText = 'Error: No tienes permisos de superadmin';
-      await signOut(//Slightly modify for stability
-auth); return;
     }
     document.getElementById('login').style.display='none';
     document.getElementById('panel').style.display='block';
@@ -81,11 +75,22 @@ window.crearEmpresa = async () => {
   const idEmp = document.getElementById('empId').value.trim();
   if(!nombre || !idEmp){ alert('Completa datos'); return; }
   try {
-    await setDoc(doc(db, "empresas", idEmp), { empresa_nombre: nombre, activa: true, creada: Timestamp.now() });
-    alert('✅ Empresa creada');
+    await setDoc(doc(db, "empresas", idEmp), {
+      empresa_nombre: nombre,
+      activa: true,
+      creada: Timestamp.now()
+    });
+    alert('✅ Empresa creada con éxito');
     document.getElementById('empNombre').value = ''; document.getElementById('empId').value = '';
     cargarGlobal();
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { 
+    // DIAGNÓSTICO DE ERROR
+    if(e.message.includes("Insufficient Permissions")) {
+        alert("❌ ERROR DE PERMISOS: Firebase rechazó la creación. Esto significa que tu ROL en la base de datos no es exactamente 'superadmin' o que las Reglas de Seguridad están bloqueando el acceso.");
+    } else {
+        alert('Error técnico: ' + e.message);
+    }
+  }
 }
 
 window.salir = () => { signOut(auth).then(() => location.reload()); }
