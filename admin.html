@@ -10,7 +10,6 @@ body{background:#f1f5f9;padding:12px}
 .btn-red{background:#dc2626;color:white}
 .btn-white{background:white;color:#0f172a}
 .btn-blue{background:#2563eb;color:white}
-.btn-gold{background:#f59e0b;color:white}
 .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0}
 .stat{background:white;padding:14px;border-radius:14px;text-align:center;box-shadow:0 2px 8px #0001}
 .stat b{font-size:22px;display:block}
@@ -41,7 +40,6 @@ body{background:#f1f5f9;padding:12px}
 .jornada-actual .btn{width:auto}
 .badge-abierta{display:inline-block;background:#16a34a;color:white;font-size:11px;padding:3px 9px;border-radius:20px;font-weight:bold;margin-left:6px}
 .badge-cerrada{display:inline-block;background:#94a3b8;color:white;font-size:11px;padding:3px 9px;border-radius:20px;font-weight:bold;margin-left:6px}
-.jornada-item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #f1f5f9;gap:8px;flex-wrap:wrap}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -62,10 +60,10 @@ let entregasPorId = {};
 let miEmpresaId = null;
 let miEmail = null;
 let autoRefreshTimer = null;
-let jornadaActual = null;        // { id, nombre, inicio, ... }
-let jornadasLista = [];          // todas las jornadas de la empresa
-let modoVista = 'jornada';       // 'jornada' | 'fecha' | 'sinjornada'
-let jornadaSeleccionada = null;  // id seleccionado cuando modoVista === 'jornada'
+let jornadaActual = null;
+let jornadasLista = [];
+let modoVista = 'jornada';
+let jornadaSeleccionada = null;
 let fechaSeleccionada = new Date();
 
 // ==================== HELPERS ====================
@@ -94,6 +92,12 @@ function duracionDesde(ts){
   const hrs = Math.floor(mins/60);
   const minRestantes = mins % 60;
   return hrs + 'h ' + minRestantes + 'min';
+}
+function timestampAMillis(ts){
+  if(!ts) return 0;
+  if(ts.toMillis) return ts.toMillis();
+  if(ts.toDate) return ts.toDate().getTime();
+  return new Date(ts).getTime();
 }
 
 // ==================== LOGIN ====================
@@ -130,11 +134,13 @@ window.entrarAdmin = async () => {
     fechaSeleccionada = new Date();
     document.getElementById('fechaSelector').value = fechaParaInput(fechaSeleccionada);
 
+    // 🔄 Cargar todo SIN ordenar en Firestore (filtramos/ordenamos en JS)
     await cargarJornadas();
     await cargarJornadaActual();
     await cargarVendedores();
     await cargarHistorial(true);
     iniciarAutoRefresh();
+    actualizarUIVista();
     await cargarLista();
   } catch(e) {
     if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
@@ -145,59 +151,71 @@ window.entrarAdmin = async () => {
   }
 }
 
-// ==================== JORNADAS ====================
+// ==================== JORNADAS (sin índices compuestos) ====================
 async function cargarJornadas(){
-  let snap;
-  try {
-    snap = await getDocsFromServer(query(
-      collection(db, "jornadas"),
-      where("empresa_id","==",miEmpresaId),
-      orderBy("inicio","desc"),
-      limit(50)
-    ));
-  } catch(e){
-    console.warn('Cargando jornadas de caché', e);
-    snap = await getDocs(query(
-      collection(db, "jornadas"),
-      where("empresa_id","==",miEmpresaId),
-      orderBy("inicio","desc"),
-      limit(50)
-    ));
-  }
   jornadasLista = [];
-  snap.forEach(d => {
-    jornadasLista.push({ id: d.id, ...d.data() });
-  });
+  try {
+    // ✅ SOLO where(empresa_id) → no necesita índice compuesto
+    let snap;
+    try {
+      snap = await getDocsFromServer(query(
+        collection(db, "jornadas"),
+        where("empresa_id","==",miEmpresaId),
+        limit(50)
+      ));
+    } catch(e1){
+      snap = await getDocs(query(
+        collection(db, "jornadas"),
+        where("empresa_id","==",miEmpresaId),
+        limit(50)
+      ));
+    }
+
+    snap.forEach(d => {
+      jornadasLista.push({ id: d.id, ...d.data() });
+    });
+
+    // 🔄 Ordenar por inicio desc en JS
+    jornadasLista.sort((a,b) => timestampAMillis(b.inicio) - timestampAMillis(a.inicio));
+  } catch(e){
+    console.error('❌ Error cargando jornadas:', e);
+  }
   renderizarSelectJornadas();
 }
 
 async function cargarJornadaActual(){
-  let snap;
+  jornadaActual = null;
   try {
-    snap = await getDocsFromServer(query(
-      collection(db, "jornadas"),
-      where("empresa_id","==",miEmpresaId),
-      where("estado","==","abierta"),
-      limit(1)
-    ));
-  } catch(e){
-    snap = await getDocs(query(
-      collection(db, "jornadas"),
-      where("empresa_id","==",miEmpresaId),
-      where("estado","==","abierta"),
-      limit(1)
-    ));
-  }
+    // ✅ SOLO where(empresa_id) → sin índice compuesto
+    let snap;
+    try {
+      snap = await getDocsFromServer(query(
+        collection(db, "jornadas"),
+        where("empresa_id","==",miEmpresaId),
+        limit(50)
+      ));
+    } catch(e1){
+      snap = await getDocs(query(
+        collection(db, "jornadas"),
+        where("empresa_id","==",miEmpresaId),
+        limit(50)
+      ));
+    }
 
-  if(!snap.empty){
-    const d = snap.docs[0];
-    jornadaActual = { id: d.id, ...d.data() };
-  } else {
+    // 🔄 Filtrar en JS la que esté abierta
+    snap.forEach(d => {
+      const data = d.data();
+      if(data.estado === 'abierta'){
+        jornadaActual = { id: d.id, ...data };
+      }
+    });
+  } catch(e){
+    console.error('❌ Error cargando jornada actual:', e);
     jornadaActual = null;
   }
+
   renderizarJornadaActual();
 
-  // Si estoy en modo jornada y no hay una seleccionada, uso la actual
   if(modoVista === 'jornada' && !jornadaSeleccionada && jornadaActual){
     jornadaSeleccionada = jornadaActual.id;
     const sel = document.getElementById('jornadaSelector');
@@ -289,10 +307,10 @@ window.confirmarNuevaJornada = async () => {
 }
 
 window.cerrarJornada = async (id) => {
-  if(!confirm('⚠️ ¿Cerrar la jornada actual?\n\nLos mensajeros ya no asociarán nuevas entregas a esta jornada.\n\n(La jornada NO se borra, solo se marca como cerrada.)')) return;
+  if(!confirm('⚠️ ¿Cerrar la jornada actual?\n\nLos mensajeros ya no asociarán nuevas entregas a esta jornada.')) return;
 
   try {
-    // Contar entregas de esa jornada
+    // Contar entregas de esa jornada — solo where(jornada_id), sin índice compuesto
     let snap;
     try {
       snap = await getDocsFromServer(query(
@@ -317,6 +335,7 @@ window.cerrarJornada = async (id) => {
     await cargarJornadas();
     await cargarJornadaActual();
     alert('🔒 Jornada cerrada.\n\nEntregas en esta jornada: ' + total);
+    await cargarLista();
   } catch(e){
     console.error(e);
     alert('Error al cerrar: ' + e.message);
@@ -328,8 +347,8 @@ window.reabrirJornada = async (id) => {
     alert('⚠️ Ya hay otra jornada abierta. Ciérrala primero.');
     return;
   }
-  if(!confirm('⚠️ ¿Reabrir esta jornada?\n\nVolverá a estar activa y los vendedores podrán asociar nuevas entregas a ella.')) return;
-  if(!confirm('🛑 CONFIRMACIÓN FINAL\n\n¿Estás completamente seguro de reabrir esta jornada?')) return;
+  if(!confirm('⚠️ ¿Reabrir esta jornada?\n\nVolverá a estar activa.')) return;
+  if(!confirm('🛑 CONFIRMACIÓN FINAL\n\n¿Estás completamente seguro?')) return;
 
   try {
     await updateDoc(doc(db, "jornadas", id), {
@@ -497,7 +516,7 @@ window.eliminarVendedor = async (uid, email) => {
   }
 }
 
-// ==================== LISTA ====================
+// ==================== TABS ====================
 window.cambiarTab = (tab) => {
   document.getElementById('lista').style.display = tab === 'hoy' ? 'block' : 'none';
   document.getElementById('historial').style.display = tab === 'hoy' ? 'none' : 'block';
@@ -507,6 +526,7 @@ window.cambiarTab = (tab) => {
   document.getElementById('tabHistorial').style.color = tab === 'hoy' ? '#0f172a' : 'white';
 }
 
+// ==================== TARJETA ====================
 function tarjetaVisita(d, docId){
   const estadoColor = d.estado === 'Entregado' ? '#16a34a' : (d.estado === 'Rechazado' ? '#dc2626' : '#ea580c');
   const foto  = d.foto  || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="70"><rect width="70" height="70" fill="%23e2e8f0"/></svg>';
@@ -518,26 +538,34 @@ function tarjetaVisita(d, docId){
   return `<div class="visita"><img src="${foto}"><div style="flex:1"><b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span>${jornadaBadge}<br><small>👤 ${d.cliente||''}</small><br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><div style="margin-top:5px; display:flex; gap:10px; flex-wrap:wrap"><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Mapa</a><button onclick="descargarPDF('${docId}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#0f172a; color:white; border:none; border-radius:6px">📄 PDF</button><button onclick="eliminarEntrega('${docId}', '${guiaSegura}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#dc2626; color:white; border:none; border-radius:6px">🗑️ Borrar</button></div></div><img class="firma-mini" src="${firma}"></div>`;
 }
 
-// ==================== CARGAR LISTA (según modo de vista) ====================
+// ==================== CARGAR LISTA ====================
 async function cargarLista(){
   let snap;
   try {
     if(modoVista === 'jornada' && jornadaSeleccionada){
+      // ✅ Solo where(jornada_id) → sin índice
+      let rawSnap;
       try {
-        snap = await getDocsFromServer(query(
+        rawSnap = await getDocsFromServer(query(
           collection(db,"visitas"),
-          where("empresa_id","==",miEmpresaId),
-          where("jornada_id","==",jornadaSeleccionada),
-          orderBy("creado","desc")
+          where("jornada_id","==",jornadaSeleccionada)
         ));
-      } catch(e){
-        snap = await getDocs(query(
+      } catch(e1){
+        rawSnap = await getDocs(query(
           collection(db,"visitas"),
-          where("empresa_id","==",miEmpresaId),
-          where("jornada_id","==",jornadaSeleccionada),
-          orderBy("creado","desc")
+          where("jornada_id","==",jornadaSeleccionada)
         ));
       }
+      // Filtrar por empresa en JS (por seguridad)
+      const arr = [];
+      rawSnap.forEach(d => {
+        const data = d.data();
+        if(data.empresa_id === miEmpresaId) arr.push({id: d.id, data});
+      });
+      // Ordenar por creado desc en JS
+      arr.sort((a,b) => timestampAMillis(b.data.creado) - timestampAMillis(a.data.creado));
+      snap = { forEach: cb => arr.forEach(x => cb({ id: x.id, data: () => x.data })) , size: arr.length };
+
     } else if(modoVista === 'fecha'){
       const inicio = new Date(fechaSeleccionada); inicio.setHours(0,0,0,0);
       const fin = new Date(fechaSeleccionada);    fin.setHours(23,59,59,999);
@@ -557,24 +585,30 @@ async function cargarLista(){
         ));
       }
     } else if(modoVista === 'sinjornada'){
-      // Firestore no permite "== null" fácil, traemos todo y filtramos local
+      // ✅ Solo where(empresa_id) → sin índice
+      let rawSnap;
       try {
-        snap = await getDocsFromServer(query(
+        rawSnap = await getDocsFromServer(query(
           collection(db,"visitas"),
           where("empresa_id","==",miEmpresaId),
-          orderBy("creado","desc"),
           limit(500)
         ));
       } catch(e){
-        snap = await getDocs(query(
+        rawSnap = await getDocs(query(
           collection(db,"visitas"),
           where("empresa_id","==",miEmpresaId),
-          orderBy("creado","desc"),
           limit(500)
         ));
       }
+      const arr = [];
+      rawSnap.forEach(d => {
+        const data = d.data();
+        if(!data.jornada_id) arr.push({id: d.id, data});
+      });
+      arr.sort((a,b) => timestampAMillis(b.data.creado) - timestampAMillis(a.data.creado));
+      snap = { forEach: cb => arr.forEach(x => cb({ id: x.id, data: () => x.data })) , size: arr.length };
+
     } else {
-      // Sin selección: mostrar vacío
       document.getElementById('lista').innerHTML = '<p style="text-align:center;color:#64748b;padding:20px">Selecciona una jornada o una fecha</p>';
       document.getElementById('ranking').innerHTML = 'No hay datos';
       document.getElementById('totalVis').innerText = 0;
@@ -596,9 +630,6 @@ async function cargarLista(){
 
   snap.forEach((docSnap) => {
     const d = docSnap.data();
-    // Si estamos en "sinjornada", filtramos localmente
-    if(modoVista === 'sinjornada' && d.jornada_id) return;
-
     datosGlobal.push(d);
     entregasPorId[docSnap.id] = d;
     totalVis++;
@@ -645,29 +676,28 @@ window.filtrarEntregas = async () => {
       '<p style="text-align:center;color:#64748b;padding:20px">🔎 Buscando en todo el historial...</p>';
 
     try {
-      let snap;
+      let rawSnap;
       try {
-        snap = await getDocsFromServer(query(
+        rawSnap = await getDocsFromServer(query(
           collection(db,"visitas"),
           where("empresa_id","==",miEmpresaId),
-          orderBy("creado","desc"),
           limit(500)
         ));
       } catch(e){
-        snap = await getDocs(query(
+        rawSnap = await getDocs(query(
           collection(db,"visitas"),
           where("empresa_id","==",miEmpresaId),
-          orderBy("creado","desc"),
           limit(500)
         ));
       }
 
       const todos = [];
-      snap.forEach(docSnap => {
+      rawSnap.forEach(docSnap => {
         const d = docSnap.data();
         entregasPorId[docSnap.id] = d;
         todos.push({ id: docSnap.id, data: d });
       });
+      todos.sort((a,b) => timestampAMillis(b.data.creado) - timestampAMillis(a.data.creado));
 
       const filtrados = todos.filter(({data: d}) => {
         const guia    = (d.guia     || '').toLowerCase();
@@ -697,7 +727,6 @@ window.filtrarEntregas = async () => {
     return;
   }
 
-  // Búsqueda local (en lo cargado)
   const filtrados = datosGlobal.filter(d => {
     const guia    = (d.guia     || '').toLowerCase();
     const cliente = (d.cliente  || '').toLowerCase();
@@ -709,7 +738,7 @@ window.filtrarEntregas = async () => {
 
   if(filtrados.length === 0){
     document.getElementById('lista').innerHTML =
-      `<p style="text-align:center;color:#64748b;padding:20px">🔍 Sin resultados para "${texto}" en la vista actual.<br><small style="color:#94a3b8">Prueba activar ☑️ "Buscar en todo el historial"</small></p>`;
+      `<p style="text-align:center;color:#64748b;padding:20px">🔍 Sin resultados para "${texto}".<br><small style="color:#94a3b8">Prueba activar ☑️ "Buscar en todo el historial"</small></p>`;
     return;
   }
 
