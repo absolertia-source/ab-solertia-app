@@ -7,13 +7,20 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+// --- Variables globales ---
+let fotoBase='', lat=7.8897, lng=-72.4967;
+let gpsValido=true;
+let miEmpresaId=null;
+let firmaBase='', dibujando=false, firmaCtx=null;
+
+// --- API expuesta al HTML ---
 window.guardarFirebase = async (d) => { return await addDoc(collection(db,"visitas"), {...d, creado: serverTimestamp()}); }
 window.loginFirebase = async (email, pass) => { return await signInWithEmailAndPassword(auth, email, pass); }
 window.logoutFirebase = async () => { return await signOut(auth); }
@@ -23,17 +30,184 @@ window.recuperarClave = async (email) => { return await sendPasswordResetEmail(a
 window.registrarError = async (contexto, mensaje) => {
   try{ await addDoc(collection(db,"errores"), { app:'index', contexto, mensaje, usuario: localStorage.getItem('ab_vend')||'', empresa_id: localStorage.getItem('ab_empresa')||'', fecha: serverTimestamp() }); }catch(e){}
 }
-</script></head><body>
-<div id="offlineAlert">⚠️ Modo Offline: Los datos se guardarán localmente y se subirán al recuperar conexión.</div>
-<div id="login" class="login"><h2>TrazaGO</h2><small>Mensajeros / Entregadores</small><br><br><input id="emp" placeholder="Correo"><input id="pass" type="password" placeholder="Contraseña"><button onclick="entrar()">Entrar</button><p id="err" style="color:red"></p><p style="text-align:center;font-size:13px;margin-top:8px"><a href="#" onclick="olvide();return false;" style="color:#0f172a">¿Olvidaste tu contraseña?</a></p></div>
-<div id="app" style="display:none"><div class="top"><b id="info"></b><button onclick="salir()" style="width:auto;padding:6px 12px">Salir</button></div><button onclick="nueva()" style="margin-top:12px">+ Registrar Entrega</button><div id="lista"></div></div>
-<div id="formVis" style="display:none;position:fixed;inset:0;background:#0008;padding:12px;overflow:auto"><div class="card" style="max-width:500px;margin:20px auto"><h3>Nueva Entrega</h3><div id="gpsStat">📡 Esperando GPS...</div><input id="guia" placeholder="Número de Pedido / Guía"><input id="cli" placeholder="Nombre del Receptor / Dirección"><p style="font-size:12px;margin-top:8px">📦 Estado de la Entrega:</p><select id="estado"><option value="Entregado">✅ Entregado</option><option value="Rechazado">❌ Rechazado</option><option value="No Encontrado">⚠️ Dirección no encontrada</option></select><p style="font-size:12px;margin-top:8px">📸 Foto de Evidencia:</p><input id="fotoFile" type="file" accept="image/*" capture="environment"><div id="infoFoto" style="font-size:11px;color:green"></div><img id="prevFoto" style="width:100%;display:none;border-radius:10px;margin-top:8px"><p style="font-size:12px;margin-top:10px">✍️ Firma de quien recibe:</p><canvas id="firmaCanvas" width="460" height="180" style="border:1px solid #e2e8f0;border-radius:10px;touch-action:none;background:#fff;display:block;width:100%;max-width:100%;margin-top:4px"></canvas><button type="button" onclick="limpiarFirma()" style="background:#e2e8f0;color:#0f172a;margin-top:6px">Borrar firma</button><button onclick="guardar()">Guardar Entrega</button><button onclick="document.getElementById('formVis').style.display='none'" style="background:#e2e8f0;color:#0f172a">Cancelar</button></div></div>
-<script>
-let fotoBase='',lat=7.8897,lng=-72.4967;
-let gpsValido=true;
-let miEmpresaId=null;
-let firmaBase='', dibujando=false, firmaCtx=null;
 
+// --- Autenticación reactiva (reemplaza localStorage) ---
+onAuthStateChanged(auth, async (user) => {
+  if(!user){
+    localStorage.removeItem('ab_vend');
+    localStorage.removeItem('ab_empresa');
+    document.getElementById('login').style.display='block';
+    document.getElementById('app').style.display='none';
+    return;
+  }
+  try {
+    const snap = await window.getUsuarioDoc(user.uid);
+    if(!snap.exists() || !snap.data().empresa_id){
+      alert('Tu cuenta no está vinculada a ninguna empresa. Contacta al administrador.');
+      await window.logoutFirebase();
+      return;
+    }
+    localStorage.setItem('ab_vend', snap.data().email || user.email);
+    localStorage.setItem('ab_empresa', snap.data().empresa_id);
+    miEmpresaId = snap.data().empresa_id;
+    mostrarApp();
+  } catch(e){
+    console.error('Error verificando perfil', e);
+    document.getElementById('login').style.display='block';
+    document.getElementById('app').style.display='none';
+  }
+});
+
+window.entrar = async () => {
+  const email=document.getElementById('emp').value.trim();
+  const p=document.getElementById('pass').value.trim();
+  const err=document.getElementById('err');
+  err.innerText='';
+  try{
+    await window.loginFirebase(email, p);
+    // onAuthStateChanged se encarga del resto
+  } catch(e){
+    if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'){
+      err.innerText='Correo o contraseña incorrectos';
+    } else if(e.code === 'auth/invalid-email'){
+      err.innerText='Correo inválido';
+    } else if(e.code === 'auth/too-many-requests'){
+      err.innerText='Demasiados intentos. Espera unos minutos.';
+    } else {
+      err.innerText='Error: '+e.code;
+    }
+  }
+}
+
+function mostrarApp(){
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('info').innerText=localStorage.getItem('ab_vend');
+  chequearConexion();
+  sincronizarPendientes();
+}
+
+function chequearConexion(){
+  const alertEl = document.getElementById('offlineAlert');
+  alertEl.style.display = navigator.onLine ? 'none' : 'block';
+}
+
+// 👇 Auto-sincronizar al recuperar conexión
+window.addEventListener('online', () => { chequearConexion(); sincronizarPendientes(); });
+window.addEventListener('offline', chequearConexion);
+
+async function sincronizarPendientes(){
+  const pendientes = JSON.parse(localStorage.getItem('pendientes_traza') || '[]');
+  if(pendientes.length === 0) return;
+  if(!auth.currentUser) return;
+
+  console.log('Sincronizando ' + pendientes.length + ' entregas...');
+  const restantes = [];
+  for(let i=0; i<pendientes.length; i++){
+    try{
+      await window.guardarFirebase(pendientes[i]);
+    } catch(e){
+      console.error('Error subiendo pendiente', e);
+      restantes.push(pendientes[i]);
+    }
+  }
+  if(restantes.length === 0){
+    localStorage.removeItem('pendientes_traza');
+    alert('✅ Se han sincronizado ' + pendientes.length + ' entregas pendientes.');
+  } else {
+    localStorage.setItem('pendientes_traza', JSON.stringify(restantes));
+    alert('⚠️ Se subieron ' + (pendientes.length - restantes.length) + ' y quedan ' + restantes.length + ' pendientes.');
+  }
+}
+
+function salir(){
+  window.logoutFirebase().then(() => {
+    localStorage.removeItem('ab_vend');
+    localStorage.removeItem('ab_empresa');
+    location.reload();
+  });
+}
+
+function nueva(){
+  document.getElementById('formVis').style.display='block';
+  document.getElementById('gpsStat').innerText='📡 Buscando GPS...';
+  document.getElementById('gpsStat').style.background='#fef3c7';
+  initFirma();
+  limpiarFirma();
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      pos=>{
+        lat=pos.coords.latitude;
+        lng=pos.coords.longitude;
+        gpsValido=true;
+        document.getElementById('gpsStat').innerText='✅ GPS OK ('+lat.toFixed(4)+', '+lng.toFixed(4)+')';
+        document.getElementById('gpsStat').style.background='#dcfce7';
+      },
+      err=>{
+        gpsValido=false;
+        document.getElementById('gpsStat').innerText='❌ Sin GPS - Se guardará sin ubicación precisa';
+        document.getElementById('gpsStat').style.background='#fecaca';
+      },
+      { enableHighAccuracy:true, timeout:8000 }
+    );
+  }
+}
+
+async function guardar(){
+  // 👇 Verificar sesión activa
+  if(!auth.currentUser){
+    alert('Tu sesión expiró. Vuelve a entrar.');
+    location.reload();
+    return;
+  }
+
+  const guia=document.getElementById('guia').value.trim();
+  const cli=document.getElementById('cli').value.trim();
+  const estado=document.getElementById('estado').value;
+  if(!guia||!cli||!fotoBase||!firmaBase){alert('Completa todos los campos y la firma');return;}
+
+  const dato = {
+    empresa_id: localStorage.getItem('ab_empresa'),
+    vendedor: localStorage.getItem('ab_vend'),
+    guia: guia, cliente: cli, estado: estado,
+    foto: fotoBase, firma: firmaBase,
+    lat: lat, lng: lng, gpsValido: gpsValido,
+    hora: new Date().toLocaleString()
+  };
+
+  if(!navigator.onLine){
+    const pendientes = JSON.parse(localStorage.getItem('pendientes_traza') || '[]');
+    pendientes.push(dato);
+    localStorage.setItem('pendientes_traza', JSON.stringify(pendientes));
+    alert('📡 Sin internet. Entrega guardada localmente y se subirá al conectar.');
+  } else {
+    try{
+      await window.guardarFirebase(dato);
+      alert('¡Entrega Registrada!');
+    } catch(e){
+      // Si falla por red, guardar como pendiente para reintentar
+      const pendientes = JSON.parse(localStorage.getItem('pendientes_traza') || '[]');
+      pendientes.push(dato);
+      localStorage.setItem('pendientes_traza', JSON.stringify(pendientes));
+      alert('⚠️ Error al subir ('+e.message+'). Se guardó localmente y se reintentará.');
+    }
+  }
+
+  document.getElementById('formVis').style.display='none';
+  document.getElementById('guia').value='';
+  document.getElementById('cli').value='';
+  document.getElementById('prevFoto').style.display='none';
+  fotoBase='';
+  limpiarFirma();
+}
+
+async function olvide(){
+  const email = document.getElementById('emp').value.trim();
+  if(!email){ alert('Escribe tu correo arriba primero'); return; }
+  try{ await window.recuperarClave(email); alert('Correo enviado a ' + email); }catch(e){ alert('Error: '+e.code); }
+}
+
+// --- Firma en canvas ---
 function initFirma(){
   const canvas = document.getElementById('firmaCanvas');
   if(!canvas || firmaCtx) return;
@@ -53,7 +227,7 @@ function initFirma(){
   canvas.addEventListener('mousedown', empezar); canvas.addEventListener('mousemove', mover); canvas.addEventListener('mouseup', terminar);
   canvas.addEventListener('touchstart', empezar, {passive:false}); canvas.addEventListener('touchmove', mover, {passive:false}); canvas.addEventListener('touchend', terminar);
 }
-function limpiarFirma(){
+window.limpiarFirma = function(){
   const canvas = document.getElementById('firmaCanvas');
   if(firmaCtx) firmaCtx.clearRect(0,0,canvas.width,canvas.height);
   firmaBase='';
@@ -62,101 +236,61 @@ function limpiarFirma(){
 document.getElementById('fotoFile').addEventListener('change',e=>{
  const file=e.target.files[0]; if(!file) return;
  const img=new Image(); img.onload=()=>{
-   const canvas=document.createElement('canvas'); let w=img.width, h=img.height; const max=800; if(w>h){ if(w>max){ h*=max/w; w=max; } } else { if(h>max){ w*=max/h; h=max; } }
-   canvas.width=w; canvas.height=h; canvas.getContext('2d').drawImage(img,0,0,w,h);
+   const canvas=document.createElement('canvas');
+   let w=img.width, h=img.height;
+   const max=800;
+   if(w>h){ if(w>max){ h*=max/w; w=max; } } else { if(h>max){ w*=max/h; h=max; } }
+   canvas.width=w; canvas.height=h;
+   canvas.getContext('2d').drawImage(img,0,0,w,h);
    fotoBase=canvas.toDataURL('image/jpeg',0.6);
-   document.getElementById('prevFoto').src=fotoBase; document.getElementById('prevFoto').style.display='block';
-   document.getElementById('infoFoto').innerText='✅ Foto comprimida';
+   document.getElementById('prevFoto').src=fotoBase;
+   document.getElementById('prevFoto').style.display='block';
+   document.getElementById('infoFoto').innerText='✅ Foto lista';
  };
  img.src=URL.createObjectURL(file);
 });
-
-async function entrar(){
-  const email=document.getElementById('emp').value.trim();
-  const p=document.getElementById('pass').value.trim();
-  const err=document.getElementById('err');
-  err.innerText='';
-  try{
-    const cred = await window.loginFirebase(email, p);
-    const usuarioSnap = await window.getUsuarioDoc(cred.user.uid);
-    if(!usuarioSnap.exists() || !usuarioSnap.data().empresa_id){
-      err.innerText='Cuenta no vinculada.';
-      await window.logoutFirebase();
-      return;
-    }
-    miEmpresaId = usuarioSnap.data().empresa_id;
-    localStorage.setItem('ab_vend', email);
-    localStorage.setItem('ab_empresa', miEmpresaId);
-    mostrarApp();
-  } catch(e){ err.innerText='Error: '+e.code; }
-}
-
-function mostrarApp(){
-  document.getElementById('login').style.display='none'; 
-  document.getElementById('app').style.display='block'; 
-  document.getElementById('info').innerText=localStorage.getItem('ab_vend');
-  chequearConexion();
-  sincronizarPendientes();
-}
-
-function chequearConexion(){
-  const alert = document.getElementById('offlineAlert');
-  if(!navigator.onLine){ alert.style.display='block'; } else { alert.style.display='none'; }
-}
-window.addEventListener('online', chequearConexion);
-window.addEventListener('offline', chequearConexion);
-
-async function sincronizarPendientes(){
-  const pendientes = JSON.parse(localStorage.getItem('pendientes_traza') || '[]');
-  if(pendientes.length === 0) return;
-  console.log('Sincronizando ' + pendientes.length + ' entregas...');
-  for(let i=0; i<pendientes.length; i++){
-    try{ await window.guardarFirebase(pendientes[i]); } catch(e){ console.error(e); }
-  }
-  localStorage.removeItem('pendientes_traza');
-  alert('✅ Se han sincronizado ' + pendientes.length + ' entregas pendientes.');
-}
-
-function salir(){ window.logoutFirebase(); localStorage.clear(); location.reload(); }
-function nueva(){document.getElementById('formVis').style.display='block'; document.getElementById('gpsStat').innerText='📡 Buscando GPS...'; initFirma(); limpiarFirma(); if(navigator.geolocation){navigator.geolocation.getCurrentPosition(pos=>{lat=pos.coords.latitude; lng=pos.coords.longitude; gpsValido=true; document.getElementById('gpsStat').innerText='✅ GPS OK'; document.getElementById('gpsStat').style.background='#dcfce7';},err=>{gpsValido=false;document.getElementById('gpsStat').innerText='❌ SIN GPS';document.getElementById('gpsStat').style.background='#fecaca';},{enableHighAccuracy:true,timeout:8000});}}
-
-async function guardar(){
-  const guia=document.getElementById('guia').value; 
-  const cli=document.getElementById('cli').value; 
-  const estado=document.getElementById('estado').value;
-  if(!guia||!cli||!fotoBase||!firmaBase){alert('Completa todos los campos y la firma');return;} 
-  
-  const dato = {
-    empresa_id:localStorage.getItem('ab_empresa'),
-    vendedor:localStorage.getItem('ab_vend'),
-    guia:guia, cliente:cli, estado:estado,
-    foto:fotoBase, firma:firmaBase,
-    lat:lat, lng:lng, gpsValido:gpsValido,
-    hora:new Date().toLocaleString()
-  };
-
-  if(!navigator.onLine){
-    const pendientes = JSON.parse(localStorage.getItem('pendientes_traza') || '[]');
-    pendientes.push(dato);
-    localStorage.setItem('pendientes_traza', JSON.stringify(pendientes));
-    alert('📡 Sin internet. Entrega guardada localmente y se subirá al conectar.');
-  } else {
-    try{
-      await window.guardarFirebase(dato);
-      alert('¡Entrega Registrada!');
-    } catch(e){ alert('Error al subir: '+e.message); }
-  }
-  
-  document.getElementById('formVis').style.display='none'; 
-  document.getElementById('guia').value=''; document.getElementById('cli').value=''; 
-  document.getElementById('prevFoto').style.display='none'; fotoBase=''; limpiarFirma();
-}
-
-async function olvide(){
-  const email = document.getElementById('emp').value.trim();
-  if(!email){ alert('Escribe tu correo'); return; }
-  try{ await window.recuperarClave(email); alert('Correo enviado'); }catch(e){ alert('Error'); }
-}
-
-if(localStorage.getItem('ab_vend') && localStorage.getItem('ab_empresa')){ mostrarApp(); }
-</script></body></html>
+</script></head><body>
+<div id="offlineAlert">⚠️ Modo Offline: Los datos se guardarán localmente y se subirán al recuperar conexión.</div>
+<div id="login" class="login">
+  <h2>TrazaGO</h2>
+  <small>Mensajeros / Entregadores</small><br><br>
+  <input id="emp" placeholder="Correo" autocomplete="username">
+  <input id="pass" type="password" placeholder="Contraseña" autocomplete="current-password">
+  <button onclick="entrar()">Entrar</button>
+  <p id="err" style="color:red"></p>
+  <p style="text-align:center;font-size:13px;margin-top:8px">
+    <a href="#" onclick="olvide();return false;" style="color:#0f172a">¿Olvidaste tu contraseña?</a>
+  </p>
+</div>
+<div id="app" style="display:none">
+  <div class="top">
+    <b id="info"></b>
+    <button onclick="salir()" style="width:auto;padding:6px 12px">Salir</button>
+  </div>
+  <button onclick="nueva()" style="margin-top:12px">+ Registrar Entrega</button>
+  <div id="lista"></div>
+</div>
+<div id="formVis" style="display:none;position:fixed;inset:0;background:#0008;padding:12px;overflow:auto">
+  <div class="card" style="max-width:500px;margin:20px auto">
+    <h3>Nueva Entrega</h3>
+    <div id="gpsStat">📡 Esperando GPS...</div>
+    <input id="guia" placeholder="Número de Pedido / Guía">
+    <input id="cli" placeholder="Nombre del Receptor / Dirección">
+    <p style="font-size:12px;margin-top:8px">📦 Estado de la Entrega:</p>
+    <select id="estado">
+      <option value="Entregado">✅ Entregado</option>
+      <option value="Rechazado">❌ Rechazado</option>
+      <option value="No Encontrado">⚠️ Dirección no encontrada</option>
+    </select>
+    <p style="font-size:12px;margin-top:8px">📸 Foto de Evidencia:</p>
+    <input id="fotoFile" type="file" accept="image/*" capture="environment">
+    <div id="infoFoto" style="font-size:11px;color:green"></div>
+    <img id="prevFoto" style="width:100%;display:none;border-radius:10px;margin-top:8px">
+    <p style="font-size:12px;margin-top:10px">✍️ Firma de quien recibe:</p>
+    <canvas id="firmaCanvas" width="460" height="180" style="border:1px solid #e2e8f0;border-radius:10px;touch-action:none;background:#fff;display:block;width:100%;max-width:100%;margin-top:4px"></canvas>
+    <button type="button" onclick="limpiarFirma()" style="background:#e2e8f0;color:#0f172a;margin-top:6px">Borrar firma</button>
+    <button onclick="guardar()">Guardar Entrega</button>
+    <button onclick="document.getElementById('formVis').style.display='none'" style="background:#e2e8f0;color:#0f172a">Cancelar</button>
+  </div>
+</div>
+</body></html>
