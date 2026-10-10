@@ -7,13 +7,16 @@ body{background:#f1f5f9;padding:12px}
 .top{background:#0f172a;color:white;padding:16px;border-radius:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
 .btn{padding:8px 14px;border-radius:10px;border:none;font-weight:700;cursor:pointer}
 .btn-green{background:#16a34a;color:white}
+.btn-red{background:#dc2626;color:white}
 .btn-white{background:white;color:#0f172a}
 .btn-blue{background:#2563eb;color:white}
+.btn-gold{background:#f59e0b;color:white}
 .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0}
 .stat{background:white;padding:14px;border-radius:14px;text-align:center;box-shadow:0 2px 8px #0001}
 .stat b{font-size:22px;display:block}
 .card{background:white;padding:14px;border-radius:16px;margin:14px 0;box-shadow:0 2px 8px #0001}
 .card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
+.card select{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0;background:white}
 .card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px;cursor:pointer}
 .login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px;box-shadow:0 4px 10px rgba(0,0,0,0.1)}
 .login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
@@ -25,22 +28,24 @@ body{background:#f1f5f9;padding:12px}
 .firma-mini{width:70px;height:40px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff}
 .rank{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:8px 4px}
 .vend-card{background:white;padding:12px;border-radius:12px;box-shadow:0 1px 4px #0001;font-size:13px}
-.fecha-bar{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
-.fecha-bar .fecha-input{flex:1;min-width:200px}
-.fecha-bar label{font-size:12px;color:#64748b;font-weight:bold;display:block;margin-bottom:4px}
-.fecha-bar input[type=date]{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;font-size:15px;background:white}
-.fecha-bar button{margin-top:0;width:auto;padding:12px 18px}
-.badge-hoy{display:inline-block;background:#16a34a;color:white;font-size:11px;padding:2px 8px;border-radius:20px;margin-left:6px;vertical-align:middle}
-.badge-otro{display:inline-block;background:#f59e0b;color:white;font-size:11px;padding:2px 8px;border-radius:20px;margin-left:6px;vertical-align:middle}
 .check-global{display:flex;align-items:center;gap:8px;font-size:13px;color:#475569;margin-top:8px;cursor:pointer;background:#f8fafc;padding:10px;border-radius:10px;border:1px solid #e2e8f0}
 .check-global input{width:auto;margin:0;flex-shrink:0}
 #lastUpdate{font-size:11px;color:#94a3b8;margin-top:4px}
 .pulse{animation:pulse 0.6s ease-in-out}
 @keyframes pulse{0%{opacity:0.5}50%{opacity:1}100%{opacity:0.5}}
+.jornada-actual{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px;border-radius:14px;background:#f0fdf4;border:2px solid #86efac}
+.jornada-actual.inactiva{background:#fff7ed;border-color:#fdba74}
+.jornada-info{flex:1;min-width:200px}
+.jornada-info b{font-size:16px;color:#0f172a}
+.jornada-info small{display:block;color:#64748b;font-size:12px;margin-top:4px}
+.jornada-actual .btn{width:auto}
+.badge-abierta{display:inline-block;background:#16a34a;color:white;font-size:11px;padding:3px 9px;border-radius:20px;font-weight:bold;margin-left:6px}
+.badge-cerrada{display:inline-block;background:#94a3b8;color:white;font-size:11px;padding:3px 9px;border-radius:20px;font-weight:bold;margin-left:6px}
+.jornada-item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #f1f5f9;gap:8px;flex-wrap:wrap}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, getDocs, getDocsFromServer, query, where, orderBy, limit, doc, getDoc, setDoc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, getDocs, getDocsFromServer, query, where, orderBy, limit, doc, getDoc, setDoc, updateDoc, deleteDoc, Timestamp, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
@@ -55,39 +60,40 @@ await setPersistence(secondaryAuth, inMemoryPersistence);
 let datosGlobal = [];
 let entregasPorId = {};
 let miEmpresaId = null;
+let miEmail = null;
 let autoRefreshTimer = null;
+let jornadaActual = null;        // { id, nombre, inicio, ... }
+let jornadasLista = [];          // todas las jornadas de la empresa
+let modoVista = 'jornada';       // 'jornada' | 'fecha' | 'sinjornada'
+let jornadaSeleccionada = null;  // id seleccionado cuando modoVista === 'jornada'
 let fechaSeleccionada = new Date();
 
-// ==================== HELPERS DE FECHA ====================
+// ==================== HELPERS ====================
 function fechaParaInput(d){
   const y  = d.getFullYear();
   const m  = String(d.getMonth()+1).padStart(2,'0');
   const dd = String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${dd}`;
 }
-
-function esFechaHoy(d){
-  const hoy = new Date(); hoy.setHours(0,0,0,0);
-  const sel = new Date(d);  sel.setHours(0,0,0,0);
-  return sel.getTime() === hoy.getTime();
+function formatearFecha(ts){
+  if(!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' });
 }
-
-function actualizarLabelFecha(){
-  const sel = fechaSeleccionada;
-  const esHoy = esFechaHoy(sel);
-  const fechaTxt = sel.toLocaleDateString('es-CO', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-
-  const label = document.getElementById('labelFecha');
-  if(label){
-    label.innerHTML = esHoy
-      ? '📅 Hoy <span class="badge-hoy">HOY</span>'
-      : '📅 ' + fechaTxt + ' <span class="badge-otro">OTRO DÍA</span>';
-  }
-
-  const tabHoy = document.getElementById('tabHoy');
-  if(tabHoy){
-    tabHoy.innerText = esHoy ? '📋 Hoy' : '📋 Día consultado';
-  }
+function formatearFechaHora(ts){
+  if(!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleString('es-CO', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+function duracionDesde(ts){
+  if(!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if(mins < 60) return mins + ' min';
+  const hrs = Math.floor(mins/60);
+  const minRestantes = mins % 60;
+  return hrs + 'h ' + minRestantes + 'min';
 }
 
 // ==================== LOGIN ====================
@@ -99,24 +105,19 @@ window.entrarAdmin = async () => {
 
   try {
     const cred = await signInWithEmailAndPassword(auth, email, pass);
-    console.log("Paso 1: Auth OK");
-
     const userSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
     if(!userSnap.exists()){
       err.innerText = '❌ ERROR: Usuario autenticado pero NO EXISTE en la tabla "usuarios"';
       await signOut(auth); return;
     }
-    console.log("Paso 2: Perfil encontrado");
-
     const userData = userSnap.data();
     const rol = userData.rol;
     if(rol !== "admin" && rol !== "superadmin"){
       err.innerText = `❌ ERROR: Tu rol es "${rol}". Se requiere "admin" o "superadmin"`;
       await signOut(auth); return;
     }
-    console.log("Paso 3: Rol OK");
-
     miEmpresaId = userData.empresa_id;
+    miEmail = email;
     if(!miEmpresaId){
       err.innerText = '❌ ERROR: Usuario sin empresa_id asignada';
       await signOut(auth); return;
@@ -128,17 +129,13 @@ window.entrarAdmin = async () => {
 
     fechaSeleccionada = new Date();
     document.getElementById('fechaSelector').value = fechaParaInput(fechaSeleccionada);
-    actualizarLabelFecha();
 
-    try {
-      await cargar();
-      await cargarVendedores();
-      await cargarHistorial(true);
-      cambiarTab('hoy');
-      iniciarAutoRefresh();
-    } catch(e) {
-      console.error("Error cargando datos:", e);
-    }
+    await cargarJornadas();
+    await cargarJornadaActual();
+    await cargarVendedores();
+    await cargarHistorial(true);
+    iniciarAutoRefresh();
+    await cargarLista();
   } catch(e) {
     if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
         err.innerText = '❌ ERROR: Correo o contraseña incorrectos';
@@ -148,27 +145,249 @@ window.entrarAdmin = async () => {
   }
 }
 
-// ==================== SELECTOR DE FECHA ====================
-window.cambiarFecha = (valor) => {
-  if(valor){
-    const [y, m, d] = valor.split('-').map(Number);
+// ==================== JORNADAS ====================
+async function cargarJornadas(){
+  let snap;
+  try {
+    snap = await getDocsFromServer(query(
+      collection(db, "jornadas"),
+      where("empresa_id","==",miEmpresaId),
+      orderBy("inicio","desc"),
+      limit(50)
+    ));
+  } catch(e){
+    console.warn('Cargando jornadas de caché', e);
+    snap = await getDocs(query(
+      collection(db, "jornadas"),
+      where("empresa_id","==",miEmpresaId),
+      orderBy("inicio","desc"),
+      limit(50)
+    ));
+  }
+  jornadasLista = [];
+  snap.forEach(d => {
+    jornadasLista.push({ id: d.id, ...d.data() });
+  });
+  renderizarSelectJornadas();
+}
+
+async function cargarJornadaActual(){
+  let snap;
+  try {
+    snap = await getDocsFromServer(query(
+      collection(db, "jornadas"),
+      where("empresa_id","==",miEmpresaId),
+      where("estado","==","abierta"),
+      limit(1)
+    ));
+  } catch(e){
+    snap = await getDocs(query(
+      collection(db, "jornadas"),
+      where("empresa_id","==",miEmpresaId),
+      where("estado","==","abierta"),
+      limit(1)
+    ));
+  }
+
+  if(!snap.empty){
+    const d = snap.docs[0];
+    jornadaActual = { id: d.id, ...d.data() };
+  } else {
+    jornadaActual = null;
+  }
+  renderizarJornadaActual();
+
+  // Si estoy en modo jornada y no hay una seleccionada, uso la actual
+  if(modoVista === 'jornada' && !jornadaSeleccionada && jornadaActual){
+    jornadaSeleccionada = jornadaActual.id;
+    const sel = document.getElementById('jornadaSelector');
+    if(sel) sel.value = jornadaSeleccionada;
+  }
+}
+
+function renderizarJornadaActual(){
+  const cont = document.getElementById('jornadaActualCard');
+  if(!cont) return;
+
+  if(jornadaActual){
+    cont.className = 'jornada-actual';
+    cont.innerHTML = `
+      <div class="jornada-info">
+        <b>🟢 ${jornadaActual.nombre || 'Jornada sin nombre'}</b><span class="badge-abierta">ABIERTA</span>
+        <small>Iniciada hace ${duracionDesde(jornadaActual.inicio)} · ${formatearFechaHora(jornadaActual.inicio)}</small>
+        <small>Creada por: ${jornadaActual.creada_por || '—'}</small>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-white" onclick="verJornadaActual()">👁 Ver entregas</button>
+        <button class="btn btn-red" onclick="cerrarJornada('${jornadaActual.id}')">🔒 Cerrar jornada</button>
+      </div>`;
+  } else {
+    cont.className = 'jornada-actual inactiva';
+    cont.innerHTML = `
+      <div class="jornada-info">
+        <b>🟡 No hay jornada abierta</b>
+        <small>Los mensajeros pueden registrar entregas, pero quedarán como "sin jornada"</small>
+      </div>
+      <button class="btn btn-green" onclick="abrirModalNuevaJornada()">➕ Abrir nueva jornada</button>`;
+  }
+}
+
+function renderizarSelectJornadas(){
+  const sel = document.getElementById('jornadaSelector');
+  if(!sel) return;
+  let html = '<option value="">— Selecciona una jornada —</option>';
+  jornadasLista.forEach(j => {
+    const estado = j.estado === 'abierta' ? '🟢' : '🔴';
+    const fecha = formatearFecha(j.inicio);
+    html += `<option value="${j.id}">${estado} ${j.nombre || 'Sin nombre'} · ${fecha}</option>`;
+  });
+  sel.innerHTML = html;
+}
+
+window.abrirModalNuevaJornada = () => {
+  if(jornadaActual){
+    alert('⚠️ Ya hay una jornada abierta.\n\nCiérrala primero antes de abrir otra.');
+    return;
+  }
+  const nombreDefecto = 'Jornada del ' + new Date().toLocaleDateString('es-CO', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+  document.getElementById('nuevaJornadaNombre').value = nombreDefecto;
+  document.getElementById('nuevaJornadaNotas').value = '';
+  document.getElementById('modalNuevaJornada').style.display = 'flex';
+}
+
+window.cerrarModalNuevaJornada = () => {
+  document.getElementById('modalNuevaJornada').style.display = 'none';
+}
+
+window.confirmarNuevaJornada = async () => {
+  const nombre = document.getElementById('nuevaJornadaNombre').value.trim();
+  const notas = document.getElementById('nuevaJornadaNotas').value.trim();
+  if(!nombre){ alert('Ponle un nombre a la jornada'); return; }
+
+  const idNueva = 'j_' + Date.now();
+  try {
+    await setDoc(doc(db, "jornadas", idNueva), {
+      empresa_id: miEmpresaId,
+      nombre: nombre,
+      notas: notas,
+      inicio: serverTimestamp(),
+      fin: null,
+      estado: 'abierta',
+      creada_por: miEmail,
+      cerrada_por: null,
+      total_entregas: 0
+    });
+    cerrarModalNuevaJornada();
+    await cargarJornadas();
+    await cargarJornadaActual();
+    alert('✅ Jornada abierta: ' + nombre);
+    await cargarLista();
+  } catch(e){
+    console.error(e);
+    alert('Error al crear jornada: ' + e.message);
+  }
+}
+
+window.cerrarJornada = async (id) => {
+  if(!confirm('⚠️ ¿Cerrar la jornada actual?\n\nLos mensajeros ya no asociarán nuevas entregas a esta jornada.\n\n(La jornada NO se borra, solo se marca como cerrada.)')) return;
+
+  try {
+    // Contar entregas de esa jornada
+    let snap;
+    try {
+      snap = await getDocsFromServer(query(
+        collection(db,"visitas"),
+        where("jornada_id","==",id)
+      ));
+    } catch(e){
+      snap = await getDocs(query(
+        collection(db,"visitas"),
+        where("jornada_id","==",id)
+      ));
+    }
+    const total = snap.size;
+
+    await updateDoc(doc(db, "jornadas", id), {
+      estado: 'cerrada',
+      fin: serverTimestamp(),
+      cerrada_por: miEmail,
+      total_entregas: total
+    });
+
+    await cargarJornadas();
+    await cargarJornadaActual();
+    alert('🔒 Jornada cerrada.\n\nEntregas en esta jornada: ' + total);
+  } catch(e){
+    console.error(e);
+    alert('Error al cerrar: ' + e.message);
+  }
+}
+
+window.reabrirJornada = async (id) => {
+  if(jornadaActual){
+    alert('⚠️ Ya hay otra jornada abierta. Ciérrala primero.');
+    return;
+  }
+  if(!confirm('⚠️ ¿Reabrir esta jornada?\n\nVolverá a estar activa y los vendedores podrán asociar nuevas entregas a ella.')) return;
+  if(!confirm('🛑 CONFIRMACIÓN FINAL\n\n¿Estás completamente seguro de reabrir esta jornada?')) return;
+
+  try {
+    await updateDoc(doc(db, "jornadas", id), {
+      estado: 'abierta',
+      fin: null,
+      cerrada_por: null
+    });
+    await cargarJornadas();
+    await cargarJornadaActual();
+    alert('🔓 Jornada reabierta.');
+    await cargarLista();
+  } catch(e){
+    alert('Error: ' + e.message);
+  }
+}
+
+window.verJornadaActual = () => {
+  modoVista = 'jornada';
+  jornadaSeleccionada = jornadaActual?.id || '';
+  document.getElementById('modoVista').value = 'jornada';
+  document.getElementById('jornadaSelector').value = jornadaSeleccionada;
+  actualizarUIVista();
+  cargarLista();
+}
+
+window.cambiarModoVista = () => {
+  modoVista = document.getElementById('modoVista').value;
+  document.getElementById('searchGuia').value = '';
+  document.getElementById('buscarGlobal').checked = false;
+  actualizarUIVista();
+  cargarLista();
+}
+
+window.cambiarJornadaSeleccionada = (val) => {
+  jornadaSeleccionada = val;
+  cargarLista();
+}
+
+window.cambiarFecha = (val) => {
+  if(val){
+    const [y, m, d] = val.split('-').map(Number);
     fechaSeleccionada = new Date(y, m-1, d);
   } else {
     fechaSeleccionada = new Date();
   }
-  actualizarLabelFecha();
-  document.getElementById('searchGuia').value = '';
-  document.getElementById('buscarGlobal').checked = false;
-  cargar().catch(e => console.error('Error al cambiar fecha', e));
+  cargarLista();
 }
 
 window.irAHoy = () => {
   fechaSeleccionada = new Date();
   document.getElementById('fechaSelector').value = fechaParaInput(fechaSeleccionada);
-  actualizarLabelFecha();
-  document.getElementById('searchGuia').value = '';
-  document.getElementById('buscarGlobal').checked = false;
-  cargar().catch(e => console.error('Error al volver a hoy', e));
+  cargarLista();
+}
+
+function actualizarUIVista(){
+  document.getElementById('grupoJornada').style.display = modoVista === 'jornada' ? 'block' : 'none';
+  document.getElementById('grupoFecha').style.display = modoVista === 'fecha' ? 'block' : 'none';
+  document.getElementById('grupoSinJornada').style.display = modoVista === 'sinjornada' ? 'block' : 'none';
 }
 
 // ==================== AUTO REFRESH ====================
@@ -176,10 +395,10 @@ function iniciarAutoRefresh(){
   if(autoRefreshTimer) clearInterval(autoRefreshTimer);
   autoRefreshTimer = setInterval(() => {
     if(document.visibilityState === 'visible' && miEmpresaId){
-      // Solo refresca si no hay búsqueda activa (para no borrar los resultados)
       const searchVal = (document.getElementById('searchGuia')?.value || '').trim();
       if(!searchVal){
-        cargar().catch(e => console.warn('Auto-refresh falló', e));
+        cargarJornadaActual().catch(()=>{});
+        cargarLista().catch(e => console.warn('Auto-refresh falló', e));
       }
     }
   }, 30000);
@@ -187,9 +406,9 @@ function iniciarAutoRefresh(){
 
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible' && miEmpresaId){
-    const searchVal = (document.getElementById('searchGuia')?.value || '').trim();
-    if(!searchVal){
-      cargar().catch(e => console.warn('Refresh por visibilidad falló', e));
+    cargarJornadaActual().catch(()=>{});
+    if(!(document.getElementById('searchGuia')?.value || '').trim()){
+      cargarLista().catch(()=>{});
     }
   }
 });
@@ -201,13 +420,14 @@ window.recargarTodo = async () => {
   try {
     document.getElementById('searchGuia').value = '';
     document.getElementById('buscarGlobal').checked = false;
-    await cargar();
+    await cargarJornadas();
+    await cargarJornadaActual();
     await cargarVendedores();
     await cargarHistorial(true);
+    await cargarLista();
     actualizarUltimaSync();
   } catch(e){
-    console.error("Error recargando:", e);
-    alert('Error al actualizar: ' + e.message);
+    alert('Error: ' + e.message);
   } finally {
     setTimeout(() => btn && btn.classList.remove('pulse'), 600);
   }
@@ -240,9 +460,7 @@ window.invitarVendedor = async () => {
     cargarVendedores();
   } catch(e) {
     if(e.code === 'auth/email-already-in-use'){
-      alert('⚠️ Ese correo ya está registrado en Authentication. Usa otro o bórralo desde Firebase Console.');
-    } else if(e.code === 'auth/weak-password'){
-      alert('⚠️ Contraseña muy débil. Usa al menos 6 caracteres.');
+      alert('⚠️ Ese correo ya está registrado en Authentication.');
     } else {
       alert('Error: ' + e.code);
     }
@@ -258,14 +476,12 @@ async function cargarVendedores(){
       where("rol","==","vendedor")
     ));
   } catch(e){
-    console.warn('Usando caché para vendedores', e);
     snap = await getDocs(query(
       collection(db,"usuarios"),
       where("empresa_id","==",miEmpresaId),
       where("rol","==","vendedor")
     ));
   }
-
   let html = '';
   snap.forEach(d => {
     const email = d.data().email || '(sin correo)';
@@ -275,13 +491,13 @@ async function cargarVendedores(){
 }
 
 window.eliminarVendedor = async (uid, email) => {
-  if(confirm(`¿Eliminar a ${email}?\n\nNota: esto borra solo el perfil en Firestore. El usuario en Authentication debe borrarse desde la consola de Firebase.`)){
+  if(confirm(`¿Eliminar a ${email}?`)){
     await deleteDoc(doc(db, "usuarios", uid));
     cargarVendedores();
   }
 }
 
-// ==================== TABS ====================
+// ==================== LISTA ====================
 window.cambiarTab = (tab) => {
   document.getElementById('lista').style.display = tab === 'hoy' ? 'block' : 'none';
   document.getElementById('historial').style.display = tab === 'hoy' ? 'none' : 'block';
@@ -291,38 +507,85 @@ window.cambiarTab = (tab) => {
   document.getElementById('tabHistorial').style.color = tab === 'hoy' ? '#0f172a' : 'white';
 }
 
-// ==================== TARJETA VISITA ====================
 function tarjetaVisita(d, docId){
   const estadoColor = d.estado === 'Entregado' ? '#16a34a' : (d.estado === 'Rechazado' ? '#dc2626' : '#ea580c');
   const foto  = d.foto  || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="70"><rect width="70" height="70" fill="%23e2e8f0"/></svg>';
   const firma = d.firma || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="40"><rect width="70" height="40" fill="%23f1f5f9"/></svg>';
   const guiaSegura = (d.guia || '').replace(/'/g, '').replace(/"/g, '');
-  return `<div class="visita"><img src="${foto}"><div style="flex:1"><b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span><br><small>👤 ${d.cliente||''}</small><br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><div style="margin-top:5px; display:flex; gap:10px; flex-wrap:wrap"><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Mapa</a><button onclick="descargarPDF('${docId}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#0f172a; color:white; border:none; border-radius:6px">📄 PDF</button><button onclick="eliminarEntrega('${docId}', '${guiaSegura}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#dc2626; color:white; border:none; border-radius:6px">🗑️ Borrar</button></div></div><img class="firma-mini" src="${firma}"></div>`;
+  const jornadaBadge = d.jornada_id
+    ? `<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:20px;font-size:10px;margin-left:4px">📋 ${d.jornada_nombre || 'jornada'}</span>`
+    : `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:20px;font-size:10px;margin-left:4px">⚠️ Sin jornada</span>`;
+  return `<div class="visita"><img src="${foto}"><div style="flex:1"><b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span>${jornadaBadge}<br><small>👤 ${d.cliente||''}</small><br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><div style="margin-top:5px; display:flex; gap:10px; flex-wrap:wrap"><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Mapa</a><button onclick="descargarPDF('${docId}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#0f172a; color:white; border:none; border-radius:6px">📄 PDF</button><button onclick="eliminarEntrega('${docId}', '${guiaSegura}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#dc2626; color:white; border:none; border-radius:6px">🗑️ Borrar</button></div></div><img class="firma-mini" src="${firma}"></div>`;
 }
 
-// ==================== CARGAR (día seleccionado) ====================
-async function cargar(){
-  const inicio = new Date(fechaSeleccionada);
-  inicio.setHours(0, 0, 0, 0);
-  const fin = new Date(fechaSeleccionada);
-  fin.setHours(23, 59, 59, 999);
-
+// ==================== CARGAR LISTA (según modo de vista) ====================
+async function cargarLista(){
   let snap;
   try {
-    snap = await getDocsFromServer(query(
-      collection(db,"visitas"),
-      where("empresa_id","==",miEmpresaId),
-      where("creado",">=",Timestamp.fromDate(inicio)),
-      where("creado","<=",Timestamp.fromDate(fin))
-    ));
+    if(modoVista === 'jornada' && jornadaSeleccionada){
+      try {
+        snap = await getDocsFromServer(query(
+          collection(db,"visitas"),
+          where("empresa_id","==",miEmpresaId),
+          where("jornada_id","==",jornadaSeleccionada),
+          orderBy("creado","desc")
+        ));
+      } catch(e){
+        snap = await getDocs(query(
+          collection(db,"visitas"),
+          where("empresa_id","==",miEmpresaId),
+          where("jornada_id","==",jornadaSeleccionada),
+          orderBy("creado","desc")
+        ));
+      }
+    } else if(modoVista === 'fecha'){
+      const inicio = new Date(fechaSeleccionada); inicio.setHours(0,0,0,0);
+      const fin = new Date(fechaSeleccionada);    fin.setHours(23,59,59,999);
+      try {
+        snap = await getDocsFromServer(query(
+          collection(db,"visitas"),
+          where("empresa_id","==",miEmpresaId),
+          where("creado",">=",Timestamp.fromDate(inicio)),
+          where("creado","<=",Timestamp.fromDate(fin))
+        ));
+      } catch(e){
+        snap = await getDocs(query(
+          collection(db,"visitas"),
+          where("empresa_id","==",miEmpresaId),
+          where("creado",">=",Timestamp.fromDate(inicio)),
+          where("creado","<=",Timestamp.fromDate(fin))
+        ));
+      }
+    } else if(modoVista === 'sinjornada'){
+      // Firestore no permite "== null" fácil, traemos todo y filtramos local
+      try {
+        snap = await getDocsFromServer(query(
+          collection(db,"visitas"),
+          where("empresa_id","==",miEmpresaId),
+          orderBy("creado","desc"),
+          limit(500)
+        ));
+      } catch(e){
+        snap = await getDocs(query(
+          collection(db,"visitas"),
+          where("empresa_id","==",miEmpresaId),
+          orderBy("creado","desc"),
+          limit(500)
+        ));
+      }
+    } else {
+      // Sin selección: mostrar vacío
+      document.getElementById('lista').innerHTML = '<p style="text-align:center;color:#64748b;padding:20px">Selecciona una jornada o una fecha</p>';
+      document.getElementById('ranking').innerHTML = 'No hay datos';
+      document.getElementById('totalVis').innerText = 0;
+      document.getElementById('totalFirmadas').innerText = 0;
+      document.getElementById('totalSinFirma').innerText = 0;
+      return;
+    }
   } catch(e){
-    console.warn('Sin conexión al servidor, usando caché', e);
-    snap = await getDocs(query(
-      collection(db,"visitas"),
-      where("empresa_id","==",miEmpresaId),
-      where("creado",">=",Timestamp.fromDate(inicio)),
-      where("creado","<=",Timestamp.fromDate(fin))
-    ));
+    console.error(e);
+    document.getElementById('lista').innerHTML = '<p style="color:#dc2626;padding:20px">Error al cargar: ' + e.message + '</p>';
+    return;
   }
 
   let totalVis = 0, totalFirmadas = 0;
@@ -333,6 +596,9 @@ async function cargar(){
 
   snap.forEach((docSnap) => {
     const d = docSnap.data();
+    // Si estamos en "sinjornada", filtramos localmente
+    if(modoVista === 'sinjornada' && d.jornada_id) return;
+
     datosGlobal.push(d);
     entregasPorId[docSnap.id] = d;
     totalVis++;
@@ -355,33 +621,25 @@ async function cargar(){
   });
   document.getElementById('ranking').innerHTML = htmlRank || 'No hay datos';
 
-  const vacio = esFechaHoy(fechaSeleccionada)
-    ? 'No hay entregas hoy'
-    : 'No hay entregas para ese día';
-  document.getElementById('lista').innerHTML = htmlVisitas || vacio;
+  let vacio = 'No hay entregas en esta vista';
+  if(modoVista === 'jornada') vacio = 'Esta jornada no tiene entregas registradas';
+  if(modoVista === 'fecha') vacio = 'No hay entregas en esa fecha';
+  if(modoVista === 'sinjornada') vacio = 'No hay entregas sin jornada';
 
+  document.getElementById('lista').innerHTML = htmlVisitas || vacio;
   actualizarUltimaSync();
 }
 
-// ==================== BÚSQUEDA (local + global) ====================
+// ==================== BÚSQUEDA ====================
 window.filtrarEntregas = async () => {
   const texto = (document.getElementById('searchGuia').value || '').toLowerCase().trim();
   const buscarGlobal = document.getElementById('buscarGlobal')?.checked;
 
-  // Si está vacío, mostrar el día normal
   if(!texto){
-    const html = datosGlobal.map(d => {
-      const idReal = Object.keys(entregasPorId).find(k => entregasPorId[k] === d);
-      return tarjetaVisita(d, idReal);
-    }).join('');
-    const vacio = esFechaHoy(fechaSeleccionada)
-      ? 'No hay entregas hoy'
-      : 'No hay entregas para ese día';
-    document.getElementById('lista').innerHTML = html || vacio;
+    await cargarLista();
     return;
   }
 
-  // ============ BÚSQUEDA GLOBAL (todo el historial) ============
   if(buscarGlobal){
     document.getElementById('lista').innerHTML =
       '<p style="text-align:center;color:#64748b;padding:20px">🔎 Buscando en todo el historial...</p>';
@@ -396,7 +654,6 @@ window.filtrarEntregas = async () => {
           limit(500)
         ));
       } catch(e){
-        console.warn('Sin conexión, usando caché para búsqueda global', e);
         snap = await getDocs(query(
           collection(db,"visitas"),
           where("empresa_id","==",miEmpresaId),
@@ -417,7 +674,8 @@ window.filtrarEntregas = async () => {
         const cliente = (d.cliente  || '').toLowerCase();
         const vend    = (d.vendedor || '').toLowerCase();
         const estado  = (d.estado   || '').toLowerCase();
-        return guia.includes(texto) || cliente.includes(texto) || vend.includes(texto) || estado.includes(texto);
+        const jornada = (d.jornada_nombre || '').toLowerCase();
+        return guia.includes(texto) || cliente.includes(texto) || vend.includes(texto) || estado.includes(texto) || jornada.includes(texto);
       });
 
       if(filtrados.length === 0){
@@ -427,32 +685,31 @@ window.filtrarEntregas = async () => {
       }
 
       const encabezado = `<p style="background:#eff6ff;color:#1e40af;padding:10px;border-radius:10px;font-size:13px;margin:0 4px 10px">
-        📚 <b>${filtrados.length}</b> resultado(s) encontrado(s) en el historial (últimas 500 entregas)
+        📚 <b>${filtrados.length}</b> resultado(s) encontrado(s) en el historial
       </p>`;
 
       document.getElementById('lista').innerHTML = encabezado +
         filtrados.map(({id, data}) => tarjetaVisita(data, id)).join('');
-
     } catch(e) {
-      console.error('Error buscando globalmente', e);
       document.getElementById('lista').innerHTML =
-        `<p style="text-align:center;color:#dc2626;padding:20px">❌ Error al buscar: ${e.message}</p>`;
+        `<p style="text-align:center;color:#dc2626;padding:20px">❌ Error: ${e.message}</p>`;
     }
     return;
   }
 
-  // ============ BÚSQUEDA LOCAL (solo el día seleccionado) ============
+  // Búsqueda local (en lo cargado)
   const filtrados = datosGlobal.filter(d => {
     const guia    = (d.guia     || '').toLowerCase();
     const cliente = (d.cliente  || '').toLowerCase();
     const vend    = (d.vendedor || '').toLowerCase();
     const estado  = (d.estado   || '').toLowerCase();
-    return guia.includes(texto) || cliente.includes(texto) || vend.includes(texto) || estado.includes(texto);
+    const jornada = (d.jornada_nombre || '').toLowerCase();
+    return guia.includes(texto) || cliente.includes(texto) || vend.includes(texto) || estado.includes(texto) || jornada.includes(texto);
   });
 
   if(filtrados.length === 0){
     document.getElementById('lista').innerHTML =
-      `<p style="text-align:center;color:#64748b;padding:20px">🔍 Sin resultados para "${texto}" en el día seleccionado.<br><small style="color:#94a3b8">Prueba activar ☑️ "Buscar en todo el historial"</small></p>`;
+      `<p style="text-align:center;color:#64748b;padding:20px">🔍 Sin resultados para "${texto}" en la vista actual.<br><small style="color:#94a3b8">Prueba activar ☑️ "Buscar en todo el historial"</small></p>`;
     return;
   }
 
@@ -462,24 +719,19 @@ window.filtrarEntregas = async () => {
   }).join('');
 }
 
-// ==================== ELIMINAR ENTREGA ====================
+// ==================== ELIMINAR ====================
 window.eliminarEntrega = async (docId, guia) => {
-  const confirmar = confirm(
-    `⚠️ ¿Borrar la entrega "${guia || docId}"?\n\nEsta acción NO se puede deshacer.`
-  );
-  if(!confirmar) return;
+  if(!confirm(`⚠️ ¿Borrar la entrega "${guia || docId}"?\n\nEsta acción NO se puede deshacer.`)) return;
 
   try {
     await deleteDoc(doc(db, "visitas", docId));
-    console.log('✅ Entrega eliminada: ' + docId);
-    await cargar();
+    await cargarLista();
     await cargarHistorial(true);
   } catch(e) {
-    console.error('Error al borrar', e);
     if(e.code === 'permission-denied'){
-      alert('❌ No tienes permiso para borrar esta entrega.');
+      alert('❌ No tienes permiso para borrar.');
     } else {
-      alert('Error al borrar: ' + e.message);
+      alert('Error: ' + e.message);
     }
   }
 }
@@ -497,15 +749,16 @@ window.descargarPDF = async (docId) => {
   docPdf.text(`Receptor: ${d.cliente || ''}`, 20, 42);
   docPdf.text(`Estado: ${d.estado || ''}`, 20, 49);
   docPdf.text(`Mensajero: ${d.vendedor || ''}`, 20, 56);
-  docPdf.text(`Fecha y Hora: ${d.hora || ''}`, 20, 63);
-  docPdf.text(`Ubicación: ${d.lat || ''}, ${d.lng || ''}`, 20, 70);
+  docPdf.text(`Jornada: ${d.jornada_nombre || 'Sin jornada'}`, 20, 63);
+  docPdf.text(`Fecha y Hora: ${d.hora || ''}`, 20, 70);
+  docPdf.text(`Ubicación: ${d.lat || ''}, ${d.lng || ''}`, 20, 77);
 
   try {
-    if(d.foto)  docPdf.addImage(d.foto,  'JPEG', 20, 80, 60, 60);
-    if(d.firma) docPdf.addImage(d.firma, 'PNG', 100, 80, 60, 30);
-  } catch(e){ console.warn('No se pudo añadir imagen al PDF', e); }
+    if(d.foto)  docPdf.addImage(d.foto,  'JPEG', 20, 87, 60, 60);
+    if(d.firma) docPdf.addImage(d.firma, 'PNG', 100, 87, 60, 30);
+  } catch(e){ console.warn(e); }
 
-  docPdf.text("Este documento sirve como prueba legal de entrega.", 20, 160);
+  docPdf.text("Este documento sirve como prueba legal de entrega.", 20, 165);
   docPdf.save(`Entrega_${d.guia || docId}.pdf`);
 }
 
@@ -513,6 +766,7 @@ window.descargarPDF = async (docId) => {
 window.descargarExcel = () => {
   if(datosGlobal.length === 0){ alert('No hay datos para exportar'); return; }
   const datosExcel = datosGlobal.map(d => ({
+    Jornada: d.jornada_nombre || 'Sin jornada',
     Mensajero: d.vendedor || '',
     Guia: d.guia || '',
     Estado: d.estado || '',
@@ -524,8 +778,8 @@ window.descargarExcel = () => {
   const ws = XLSX.utils.json_to_sheet(datosExcel);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Entregas");
-  const fechaTxt = fechaParaInput(fechaSeleccionada);
-  XLSX.writeFile(wb, `TrazaGO_Entregas_${fechaTxt}.xlsx`);
+  const etiqueta = modoVista === 'jornada' ? 'jornada' : fechaParaInput(fechaSeleccionada);
+  XLSX.writeFile(wb, `TrazaGO_Entregas_${etiqueta}.xlsx`);
 }
 
 // ==================== HISTORIAL ====================
@@ -540,7 +794,6 @@ async function cargarHistorial(reset){
       limit(50)
     ));
   } catch(e){
-    console.warn('Sin conexión, usando caché para historial', e);
     snap = await getDocs(query(
       collection(db,"visitas"),
       where("empresa_id","==",miEmpresaId),
@@ -548,7 +801,6 @@ async function cargarHistorial(reset){
       limit(50)
     ));
   }
-
   let html = '';
   snap.forEach((docSnap) => {
     const d = docSnap.data();
@@ -558,6 +810,7 @@ async function cargarHistorial(reset){
   document.getElementById('historial').innerHTML = html || 'No hay historial';
 }
 </script></head><body>
+
 <div id="loginAdmin" class="login">
   <h2 style="text-align:center">TrazaGO</h2>
   <p style="text-align:center; color:gray">Acceso Jefe de Empresa</p><br>
@@ -579,6 +832,8 @@ async function cargarHistorial(reset){
     </div>
   </div>
 
+  <div id="jornadaActualCard" class="jornada-actual" style="margin-top:14px"></div>
+
   <div class="stats">
     <div class="stat"><b id="totalVis">0</b><small>Totales</small></div>
     <div class="stat"><b id="totalFirmadas" style="color:#16a34a">0</b><small>Con Firma</small></div>
@@ -586,21 +841,37 @@ async function cargarHistorial(reset){
   </div>
 
   <div class="card">
-    <div class="fecha-bar">
-      <div class="fecha-input">
-        <label for="fechaSelector">📅 Día a consultar</label>
-        <input type="date" id="fechaSelector" onchange="cambiarFecha(this.value)">
-      </div>
-      <button class="btn btn-blue" onclick="irAHoy()">↩︎ Volver a Hoy</button>
+    <h4>👁 Ver entregas por:</h4>
+    <select id="modoVista" onchange="cambiarModoVista()">
+      <option value="jornada">📋 Por jornada</option>
+      <option value="fecha">📅 Por fecha</option>
+      <option value="sinjornada">⚠️ Sin jornada asignada</option>
+    </select>
+
+    <div id="grupoJornada" style="margin-top:8px">
+      <label style="font-size:12px;color:#64748b;font-weight:bold">Jornada:</label>
+      <select id="jornadaSelector" onchange="cambiarJornadaSeleccionada(this.value)">
+        <option value="">— Selecciona —</option>
+      </select>
+    </div>
+
+    <div id="grupoFecha" style="display:none;margin-top:8px">
+      <label style="font-size:12px;color:#64748b;font-weight:bold">Fecha:</label>
+      <input type="date" id="fechaSelector" onchange="cambiarFecha(this.value)">
+      <button class="btn btn-blue" style="margin-top:8px" onclick="irAHoy()">↩︎ Volver a Hoy</button>
+    </div>
+
+    <div id="grupoSinJornada" style="display:none;margin-top:8px">
+      <p style="font-size:13px;color:#64748b">Mostrando entregas que se registraron sin jornada abierta (o antes de este sistema).</p>
     </div>
   </div>
 
   <div class="card">
-    <h4>🔍 Buscar Entrega <small id="labelFecha" style="font-weight:normal;color:#64748b;font-size:13px"></small></h4>
-    <input id="searchGuia" class="search-box" placeholder="Guía, cliente, mensajero o estado..." oninput="filtrarEntregas()">
+    <h4>🔍 Buscar</h4>
+    <input id="searchGuia" class="search-box" placeholder="Guía, cliente, mensajero, estado o jornada..." oninput="filtrarEntregas()">
     <label class="check-global">
       <input type="checkbox" id="buscarGlobal" onchange="filtrarEntregas()">
-      <span>🔎 <b>Buscar en todo el historial</b> (no solo el día seleccionado, máx. 500)</span>
+      <span>🔎 <b>Buscar en todo el historial</b> (no solo la vista actual, máx. 500)</span>
     </label>
   </div>
 
@@ -612,15 +883,30 @@ async function cargarHistorial(reset){
     <div id="listaVendedores" style="margin-top:10px"></div>
   </div>
 
-  <h4 style="margin:10px 4px">🏆 Productividad</h4>
+  <h4 style="margin:10px 4px">🏆 Productividad (de la vista actual)</h4>
   <div id="ranking" class="rank"></div>
 
   <div style="display:flex;gap:8px;margin:18px 4px 8px">
-    <button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Hoy</button>
-    <button id="tabHistorial" class="btn btn-white" style="flex:1" onclick="cambiarTab('historial')">📚 Historial</button>
+    <button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Vista actual</button>
+    <button id="tabHistorial" class="btn btn-white" style="flex:1" onclick="cambiarTab('historial')">📚 Historial (últimas 50)</button>
   </div>
 
   <div id="lista"></div>
   <div id="historial" style="display:none"></div>
+</div>
+
+<!-- MODAL Nueva Jornada -->
+<div id="modalNuevaJornada" style="display:none;position:fixed;inset:0;background:#0008;padding:12px;z-index:100;align-items:center;justify-content:center">
+  <div class="card" style="max-width:400px;width:100%;margin:0">
+    <h3>📋 Abrir nueva jornada</h3>
+    <label style="font-size:12px;color:#64748b;font-weight:bold;display:block;margin-top:10px">Nombre:</label>
+    <input id="nuevaJornadaNombre" placeholder="Ej: Turno mañana 10 oct">
+    <label style="font-size:12px;color:#64748b;font-weight:bold;display:block;margin-top:10px">Notas (opcional):</label>
+    <input id="nuevaJornadaNotas" placeholder="Ej: Ruta norte">
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-white" onclick="cerrarModalNuevaJornada()" style="flex:1">Cancelar</button>
+      <button class="btn btn-green" onclick="confirmarNuevaJornada()" style="flex:2">✅ Abrir jornada</button>
+    </div>
+  </div>
 </div>
 </body></html>
