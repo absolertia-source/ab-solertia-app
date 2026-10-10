@@ -25,7 +25,13 @@ body{background:#f1f5f9;padding:12px}
 .firma-mini{width:70px;height:40px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff}
 .rank{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:8px 4px}
 .vend-card{background:white;padding:12px;border-radius:12px;box-shadow:0 1px 4px #0001;font-size:13px}
-.estado-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;color:white;font-weight:bold}
+.fecha-bar{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.fecha-bar .fecha-input{flex:1;min-width:200px}
+.fecha-bar label{font-size:12px;color:#64748b;font-weight:bold;display:block;margin-bottom:4px}
+.fecha-bar input[type=date]{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;font-size:15px;background:white}
+.fecha-bar button{margin-top:0;width:auto;padding:12px 18px}
+.badge-hoy{display:inline-block;background:#16a34a;color:white;font-size:11px;padding:2px 8px;border-radius:20px;margin-left:6px;vertical-align:middle}
+.badge-otro{display:inline-block;background:#f59e0b;color:white;font-size:11px;padding:2px 8px;border-radius:20px;margin-left:6px;vertical-align:middle}
 #lastUpdate{font-size:11px;color:#94a3b8;margin-top:4px}
 .pulse{animation:pulse 0.6s ease-in-out}
 @keyframes pulse{0%{opacity:0.5}50%{opacity:1}100%{opacity:0.5}}
@@ -48,6 +54,39 @@ let datosGlobal = [];
 let entregasPorId = {};
 let miEmpresaId = null;
 let autoRefreshTimer = null;
+let fechaSeleccionada = new Date();   // 👈 día que se está viendo
+
+// ==================== HELPERS DE FECHA ====================
+function fechaParaInput(d){
+  const y  = d.getFullYear();
+  const m  = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
+
+function esFechaHoy(d){
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const sel = new Date(d);  sel.setHours(0,0,0,0);
+  return sel.getTime() === hoy.getTime();
+}
+
+function actualizarLabelFecha(){
+  const sel = fechaSeleccionada;
+  const esHoy = esFechaHoy(sel);
+  const fechaTxt = sel.toLocaleDateString('es-CO', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  const label = document.getElementById('labelFecha');
+  if(label){
+    label.innerHTML = esHoy
+      ? '📅 Hoy <span class="badge-hoy">HOY</span>'
+      : '📅 ' + fechaTxt + ' <span class="badge-otro">OTRO DÍA</span>';
+  }
+
+  const tabHoy = document.getElementById('tabHoy');
+  if(tabHoy){
+    tabHoy.innerText = esHoy ? '📋 Hoy' : '📋 Día consultado';
+  }
+}
 
 // ==================== LOGIN ====================
 window.entrarAdmin = async () => {
@@ -85,6 +124,11 @@ window.entrarAdmin = async () => {
     document.getElementById('loginAdmin').style.display='none';
     document.getElementById('panel').style.display='block';
 
+    // Inicializar selector de fecha en HOY
+    fechaSeleccionada = new Date();
+    document.getElementById('fechaSelector').value = fechaParaInput(fechaSeleccionada);
+    actualizarLabelFecha();
+
     try {
       await cargar();
       await cargarVendedores();
@@ -101,6 +145,28 @@ window.entrarAdmin = async () => {
         err.innerText = '❌ ERROR TÉCNICO: ' + e.message;
     }
   }
+}
+
+// ==================== SELECTOR DE FECHA ====================
+window.cambiarFecha = (valor) => {
+  if(valor){
+    // input type="date" devuelve "YYYY-MM-DD" en UTC. Parsear como LOCAL.
+    const [y, m, d] = valor.split('-').map(Number);
+    fechaSeleccionada = new Date(y, m-1, d);
+  } else {
+    fechaSeleccionada = new Date();
+  }
+  actualizarLabelFecha();
+  document.getElementById('searchGuia').value = '';
+  cargar().catch(e => console.error('Error al cambiar fecha', e));
+}
+
+window.irAHoy = () => {
+  fechaSeleccionada = new Date();
+  document.getElementById('fechaSelector').value = fechaParaInput(fechaSeleccionada);
+  actualizarLabelFecha();
+  document.getElementById('searchGuia').value = '';
+  cargar().catch(e => console.error('Error al volver a hoy', e));
 }
 
 // ==================== AUTO REFRESH ====================
@@ -163,7 +229,7 @@ window.invitarVendedor = async () => {
     cargarVendedores();
   } catch(e) {
     if(e.code === 'auth/email-already-in-use'){
-      alert('⚠️ Ese correo ya está registrado en Authentication (aunque no aparezca aquí). Usa otro o bórralo desde Firebase Console → Authentication → Users.');
+      alert('⚠️ Ese correo ya está registrado en Authentication. Usa otro o bórralo desde Firebase Console.');
     } else if(e.code === 'auth/weak-password'){
       alert('⚠️ Contraseña muy débil. Usa al menos 6 caracteres.');
     } else {
@@ -222,56 +288,68 @@ function tarjetaVisita(d, docId){
   return `<div class="visita"><img src="${foto}"><div style="flex:1"><b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span><br><small>👤 ${d.cliente||''}</small><br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><div style="margin-top:5px; display:flex; gap:10px"><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Mapa</a><button onclick="descargarPDF('${docId}')" style="font-size:11px; padding:2px 5px; cursor:pointer">📄 PDF</button></div></div><img class="firma-mini" src="${firma}"></div>`;
 }
 
-// ==================== CARGAR (HOY) - Forzado servidor ====================
+// ==================== CARGAR (día seleccionado) ====================
 async function cargar(){
- const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
- let snap;
- try {
-   snap = await getDocsFromServer(query(
-     collection(db,"visitas"),
-     where("empresa_id","==",miEmpresaId),
-     where("creado",">=",Timestamp.fromDate(inicioHoy))
-   ));
- } catch(e){
-   console.warn('Sin conexión al servidor, usando caché', e);
-   snap = await getDocs(query(
-     collection(db,"visitas"),
-     where("empresa_id","==",miEmpresaId),
-     where("creado",">=",Timestamp.fromDate(inicioHoy))
-   ));
- }
+  // Rango del día seleccionado (medianoche local → 23:59:59.999 local)
+  const inicio = new Date(fechaSeleccionada);
+  inicio.setHours(0, 0, 0, 0);
+  const fin = new Date(fechaSeleccionada);
+  fin.setHours(23, 59, 59, 999);
 
- let totalVis = 0, totalFirmadas = 0;
- let porVendedor = {};
- datosGlobal = [];
- entregasPorId = {};
- let htmlVisitas = '';
+  let snap;
+  try {
+    snap = await getDocsFromServer(query(
+      collection(db,"visitas"),
+      where("empresa_id","==",miEmpresaId),
+      where("creado",">=",Timestamp.fromDate(inicio)),
+      where("creado","<=",Timestamp.fromDate(fin))
+    ));
+  } catch(e){
+    console.warn('Sin conexión al servidor, usando caché', e);
+    snap = await getDocs(query(
+      collection(db,"visitas"),
+      where("empresa_id","==",miEmpresaId),
+      where("creado",">=",Timestamp.fromDate(inicio)),
+      where("creado","<=",Timestamp.fromDate(fin))
+    ));
+  }
 
- snap.forEach((docSnap) => {
-   const d = docSnap.data();
-   datosGlobal.push(d);
-   entregasPorId[docSnap.id] = d;
-   totalVis++;
-   if(d.firma) totalFirmadas++;
-   const vend = (d.vendedor || 'sin-vendedor').toLowerCase();
-   if(!porVendedor[vend]) porVendedor[vend] = {visitas:0, firmadas:0};
-   porVendedor[vend].visitas++;
-   if(d.firma) porVendedor[vend].firmadas++;
-   htmlVisitas += tarjetaVisita(d, docSnap.id);
- });
+  let totalVis = 0, totalFirmadas = 0;
+  let porVendedor = {};
+  datosGlobal = [];
+  entregasPorId = {};
+  let htmlVisitas = '';
 
- document.getElementById('totalVis').innerText = totalVis;
- document.getElementById('totalFirmadas').innerText = totalFirmadas;
- document.getElementById('totalSinFirma').innerText = totalVis - totalFirmadas;
+  snap.forEach((docSnap) => {
+    const d = docSnap.data();
+    datosGlobal.push(d);
+    entregasPorId[docSnap.id] = d;
+    totalVis++;
+    if(d.firma) totalFirmadas++;
+    const vend = (d.vendedor || 'sin-vendedor').toLowerCase();
+    if(!porVendedor[vend]) porVendedor[vend] = {visitas:0, firmadas:0};
+    porVendedor[vend].visitas++;
+    if(d.firma) porVendedor[vend].firmadas++;
+    htmlVisitas += tarjetaVisita(d, docSnap.id);
+  });
 
- let htmlRank = '';
- Object.keys(porVendedor).sort().forEach(v => {
-   const r = porVendedor[v];
-   htmlRank += `<div class="vend-card"><b>👤 ${v}</b><br><small>${r.visitas} entregas</small></div>`;
- });
- document.getElementById('ranking').innerHTML = htmlRank || 'No hay datos';
- document.getElementById('lista').innerHTML = htmlVisitas || 'No hay entregas hoy';
- actualizarUltimaSync();
+  document.getElementById('totalVis').innerText = totalVis;
+  document.getElementById('totalFirmadas').innerText = totalFirmadas;
+  document.getElementById('totalSinFirma').innerText = totalVis - totalFirmadas;
+
+  let htmlRank = '';
+  Object.keys(porVendedor).sort().forEach(v => {
+    const r = porVendedor[v];
+    htmlRank += `<div class="vend-card"><b>👤 ${v}</b><br><small>${r.visitas} entregas</small></div>`;
+  });
+  document.getElementById('ranking').innerHTML = htmlRank || 'No hay datos';
+
+  const vacio = esFechaHoy(fechaSeleccionada)
+    ? 'No hay entregas hoy'
+    : 'No hay entregas para ese día';
+  document.getElementById('lista').innerHTML = htmlVisitas || vacio;
+
+  actualizarUltimaSync();
 }
 
 // ==================== BÚSQUEDA ====================
@@ -283,7 +361,10 @@ window.filtrarEntregas = () => {
       const idReal = Object.keys(entregasPorId).find(k => entregasPorId[k] === d);
       return tarjetaVisita(d, idReal);
     }).join('');
-    document.getElementById('lista').innerHTML = html || 'No hay entregas hoy';
+    const vacio = esFechaHoy(fechaSeleccionada)
+      ? 'No hay entregas hoy'
+      : 'No hay entregas para ese día';
+    document.getElementById('lista').innerHTML = html || vacio;
     return;
   }
 
@@ -334,7 +415,7 @@ window.descargarPDF = async (docId) => {
 
 // ==================== EXCEL ====================
 window.descargarExcel = () => {
-  if(datosGlobal.length === 0){ alert('No hay datos'); return; }
+  if(datosGlobal.length === 0){ alert('No hay datos para exportar'); return; }
   const datosExcel = datosGlobal.map(d => ({
     Mensajero: d.vendedor || '',
     Guia: d.guia || '',
@@ -347,10 +428,11 @@ window.descargarExcel = () => {
   const ws = XLSX.utils.json_to_sheet(datosExcel);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Entregas");
-  XLSX.writeFile(wb, `TrazaGO_Entregas.xlsx`);
+  const fechaTxt = fechaParaInput(fechaSeleccionada);
+  XLSX.writeFile(wb, `TrazaGO_Entregas_${fechaTxt}.xlsx`);
 }
 
-// ==================== HISTORIAL - Forzado servidor ====================
+// ==================== HISTORIAL ====================
 async function cargarHistorial(reset){
   if(reset) document.getElementById('historial').innerHTML = 'Cargando...';
   let snap;
@@ -393,7 +475,7 @@ async function cargarHistorial(reset){
   <div class="top">
     <div>
       <h3>TrazaGO - Control <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3>
-      <div id="lastUpdate" style="color:#94a3b8">—</div>
+      <div id="lastUpdate">—</div>
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-green" onclick="descargarExcel()">📊 Excel</button>
@@ -407,10 +489,21 @@ async function cargarHistorial(reset){
     <div class="stat"><b id="totalSinFirma" style="color:#dc2626">0</b><small>Sin Firma</small></div>
   </div>
 
+  <!-- 📅 SELECTOR DE FECHA -->
   <div class="card">
-    <h4>🔍 Buscar Entrega</h4>
+    <div class="fecha-bar">
+      <div class="fecha-input">
+        <label for="fechaSelector">📅 Día a consultar</label>
+        <input type="date" id="fechaSelector" onchange="cambiarFecha(this.value)">
+      </div>
+      <button class="btn btn-blue" onclick="irAHoy()">↩︎ Volver a Hoy</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h4>🔍 Buscar Entrega <small id="labelFecha" style="font-weight:normal;color:#64748b;font-size:13px"></small></h4>
     <input id="searchGuia" class="search-box" placeholder="Guía, cliente, mensajero o estado..." oninput="filtrarEntregas()">
-    <small style="color:#94a3b8;font-size:11px">Busca en las entregas de hoy</small>
+    <small style="color:#94a3b8;font-size:11px">Busca dentro del día seleccionado</small>
   </div>
 
   <div class="card">
