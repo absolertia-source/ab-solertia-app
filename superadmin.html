@@ -22,10 +22,13 @@ body{background:#f1f5f9;padding:12px}
 .btn-group{display:flex;gap:5px;flex-wrap:wrap}
 .sep{border:none;border-top:1px solid #e2e8f0;margin:12px 0}
 .hint{font-size:13px;color:#64748b;margin:6px 0}
+#lastUpdate{font-size:11px;color:#94a3b8;margin-top:4px}
+.pulse{animation:pulse 0.6s ease-in-out}
+@keyframes pulse{0%{opacity:0.5}50%{opacity:1}100%{opacity:0.5}}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, getDocs, getDocsFromServer, doc, setDoc, updateDoc, deleteDoc, Timestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, getDocs, getDocsFromServer, getCountFromServer, doc, setDoc, updateDoc, deleteDoc, Timestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
@@ -36,6 +39,8 @@ const auth = getAuth(app);
 const secondaryApp  = initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = getAuth(secondaryApp);
 await setPersistence(secondaryAuth, inMemoryPersistence);
+
+let autoRefreshTimer = null;
 
 // ==================== LOGIN ====================
 window.entrarSuper = async () => {
@@ -48,19 +53,19 @@ window.entrarSuper = async () => {
     const userSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
 
     if(!userSnap.exists()){
-      err.innerText = '⚠️ Tu usuario existe en Auth pero no tiene perfil en /usuarios.';
+      err.innerText = '⚠️ Tu usuario no tiene perfil en /usuarios';
       await signOut(auth); return;
     }
-
     const rol = ((userSnap.data().rol || '') + '').toLowerCase().trim();
-    if(rol !== "superadmin"){
-      err.innerText = `⚠️ Tu rol es "${rol || '(vacío)'}". Se requiere "superadmin".`;
+    if(rol !== 'superadmin'){
+      err.innerText = `⚠️ Tu rol es "${rol}". Se requiere "superadmin".`;
       await signOut(auth); return;
     }
 
     document.getElementById('login').style.display='none';
     document.getElementById('panel').style.display='block';
     cargarGlobal();
+    iniciarAutoRefresh();
   } catch(e) {
     if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'){
       err.innerText = 'Correo o contraseña incorrectos';
@@ -70,28 +75,46 @@ window.entrarSuper = async () => {
   }
 }
 
-// ==================== CARGA GLOBAL ====================
-async function cargarGlobal(){
-  try {
-    let empSnap, visSnap, usuSnap;
-    try {
-      [empSnap, visSnap, usuSnap] = await Promise.all([
-        getDocsFromServer(collection(db, "empresas")),
-        getDocsFromServer(collection(db, "visitas")),
-        getDocsFromServer(collection(db, "usuarios"))
-      ]);
-    } catch(e){
-      console.warn('Cayendo a caché', e);
-      [empSnap, visSnap, usuSnap] = await Promise.all([
-        getDocs(collection(db, "empresas")),
-        getDocs(collection(db, "visitas")),
-        getDocs(collection(db, "usuarios"))
-      ]);
+// ==================== AUTO REFRESH ====================
+function iniciarAutoRefresh(){
+  if(autoRefreshTimer) clearInterval(autoRefreshTimer);
+  autoRefreshTimer = setInterval(() => {
+    if(document.visibilityState === 'visible' && auth.currentUser){
+      cargarGlobal();
     }
+  }, 60000);   // cada 60 segundos
+}
 
-    document.getElementById('totalEmp').innerText = empSnap.size;
-    document.getElementById('totalVis').innerText = visSnap.size;
-    document.getElementById('totalUsu').innerText = usuSnap.size;
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && auth.currentUser){
+    cargarGlobal();
+  }
+});
+
+// ==================== CARGA GLOBAL (contadores eficientes) ====================
+async function cargarGlobal(){
+  const btn = document.getElementById('btnActualizar');
+  if(btn) btn.classList.add('pulse');
+
+  try {
+    // 🚀 CONTADORES EFICIENTES: solo 3 lecturas al servidor (una por colección)
+    const [countEmp, countVis, countUsu] = await Promise.all([
+      getCountFromServer(collection(db, "empresas")),
+      getCountFromServer(collection(db, "visitas")),
+      getCountFromServer(collection(db, "usuarios"))
+    ]);
+
+    document.getElementById('totalEmp').innerText = countEmp.data().count;
+    document.getElementById('totalVis').innerText = countVis.data().count;
+    document.getElementById('totalUsu').innerText = countUsu.data().count;
+
+    // La lista de empresas sí necesita los documentos (para mostrar nombre y estado)
+    let empSnap;
+    try {
+      empSnap = await getDocsFromServer(collection(db, "empresas"));
+    } catch(e){
+      empSnap = await getDocs(collection(db, "empresas"));
+    }
 
     let htmlEmp = '';
     empSnap.forEach(d => {
@@ -105,10 +128,21 @@ async function cargarGlobal(){
       </div>`;
     });
     document.getElementById('listaEmp').innerHTML = htmlEmp || 'No hay empresas';
+
+    actualizarUltimaSync();
   } catch(e) {
     console.error(e);
     document.getElementById('listaEmp').innerHTML = 'Error al cargar: ' + e.message;
+  } finally {
+    setTimeout(() => btn && btn.classList.remove('pulse'), 600);
   }
+}
+
+window.recargarGlobal = () => cargarGlobal();
+
+function actualizarUltimaSync(){
+  const el = document.getElementById('lastUpdate');
+  if(el) el.innerText = 'Última actualización: ' + new Date().toLocaleTimeString();
 }
 
 // ==================== EMPRESAS ====================
@@ -120,13 +154,15 @@ window.toggleEmpresa = async (id, estadoActual) => {
 }
 
 window.eliminarEmpresa = async (id) => {
-  if(confirm(`¿Eliminar la empresa permanentemente?\n(Los usuarios y entregas NO se borran)`)){
+  if(!confirm(`¿Eliminar la empresa "${id}" permanentemente?\n\n(Los usuarios y entregas NO se borran, solo la empresa)`)) return;
+  try {
     await deleteDoc(doc(db, "empresas", id));
     cargarGlobal();
+  } catch(e){
+    alert('Error: ' + e.message);
   }
 }
 
-// ==================== CREAR EMPRESA + ADMIN (con diagnóstico paso a paso) ====================
 window.crearEmpresa = async () => {
   const nombre = document.getElementById('empNombre').value.trim();
   const idEmp  = document.getElementById('empId').value.trim();
@@ -145,10 +181,8 @@ window.crearEmpresa = async () => {
   }
 
   let paso = '';
-
   try {
     paso = '1/3 · Crear empresa';
-    console.log('▶️ ' + paso);
     const empRef = doc(db, "empresas", idEmp);
     const empSnap = await getDoc(empRef);
     if(empSnap.exists()){
@@ -160,15 +194,11 @@ window.crearEmpresa = async () => {
       activa: true,
       creada: Timestamp.now()
     });
-    console.log('✅ Empresa creada');
 
-    paso = '2/3 · Crear usuario en Authentication';
-    console.log('▶️ ' + paso);
+    paso = '2/3 · Crear admin en Authentication';
     const cred = await createUserWithEmailAndPassword(secondaryAuth, aEmail, aPass);
-    console.log('✅ Auth user: ' + cred.user.uid);
 
     paso = '3/3 · Guardar perfil en /usuarios';
-    console.log('▶️ ' + paso);
     await setDoc(doc(db, "usuarios", cred.user.uid), {
       email: aEmail,
       rol: "admin",
@@ -176,48 +206,53 @@ window.crearEmpresa = async () => {
       empresa_nombre: nombre,
       creado: Timestamp.now()
     });
-    console.log('✅ Perfil guardado');
 
     await signOut(secondaryAuth);
 
-    alert(`✅ Todo OK\n\nEmpresa: ${nombre}\nAdmin: ${aEmail}\n\nEl admin ya puede entrar en admin.html con:\n• Correo: ${aEmail}\n• Contraseña: la que pusiste`);
+    alert(`✅ Todo OK\n\nEmpresa: ${nombre}\nAdmin: ${aEmail}\n\nEl admin ya puede entrar en admin.html`);
     document.getElementById('empNombre').value  = '';
     document.getElementById('empId').value      = '';
     document.getElementById('adminEmail').value = '';
     document.getElementById('adminPass').value  = '';
     cargarGlobal();
-
   } catch(e) {
-    console.error('❌ Error en ' + paso, e);
+    console.error('Error en ' + paso, e);
     if(e.code === 'auth/email-already-in-use'){
-      alert(`❌ FALLÓ en ${paso}\n\nEse correo ya está registrado en Authentication.\n\n` +
-            `Puede ser un "usuario huérfano": existe en Auth pero sin perfil en Firestore.\n\n` +
-            `Soluciones:\n` +
-            `1) Ve a Firebase Console → Authentication → Users, borra ese correo y vuelve a intentar.\n` +
-            `2) O crea manualmente su perfil en Firestore → /usuarios/{UID} con rol "admin".`);
+      alert(`❌ FALLÓ en ${paso}\n\nEse correo ya está registrado en Authentication.`);
     } else if(e.code === 'permission-denied' || (e.message && e.message.includes('permission'))){
-      alert(`❌ FALLÓ en ${paso} (permisos de Firestore)\n\n` +
-            `Las reglas de Firestore bloquearon esta operación.\n` +
-            `Verifica que estén publicadas las reglas nuevas.`);
+      alert(`❌ FALLÓ en ${paso} (permisos)\n\nLas reglas de Firestore bloquearon la operación.`);
     } else {
-      alert(`❌ FALLÓ en ${paso}\n\nCódigo: ${e.code || '(sin código)'}\nMensaje: ${e.message}`);
+      alert(`❌ FALLÓ en ${paso}\n\n${e.message}`);
     }
   }
 }
 
 // ==================== BACKUP ====================
 window.descargarBackup = async () => {
-  const empSnap = await getDocs(collection(db, "empresas"));
-  const usuSnap = await getDocs(collection(db, "usuarios"));
-  const dataEmp = empSnap.docs.map(d => ({ID: d.id, ...d.data()}));
-  const dataUsu = usuSnap.docs.map(d => ({ID: d.id, ...d.data()}));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataEmp), "Empresas");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataUsu), "Usuarios");
-  XLSX.writeFile(wb, `Backup_TrazaGO.xlsx`);
+  const btn = document.getElementById('btnBackup');
+  if(btn) btn.classList.add('pulse');
+  try {
+    const [empSnap, usuSnap] = await Promise.all([
+      getDocs(collection(db, "empresas")),
+      getDocs(collection(db, "usuarios"))
+    ]);
+    const dataEmp = empSnap.docs.map(d => ({ID: d.id, ...d.data()}));
+    const dataUsu = usuSnap.docs.map(d => ({ID: d.id, ...d.data()}));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataEmp), "Empresas");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataUsu), "Usuarios");
+    XLSX.writeFile(wb, `Backup_TrazaGO_${new Date().toISOString().slice(0,10)}.xlsx`);
+  } catch(e){
+    alert('Error al hacer backup: ' + e.message);
+  } finally {
+    setTimeout(() => btn && btn.classList.remove('pulse'), 600);
+  }
 }
 
-window.salir = () => { signOut(auth).then(() => location.reload()); }
+window.salir = () => {
+  if(autoRefreshTimer) clearInterval(autoRefreshTimer);
+  signOut(auth).then(() => location.reload());
+}
 </script></head><body>
 
 <div id="login" class="login">
@@ -231,9 +266,13 @@ window.salir = () => { signOut(auth).then(() => location.reload()); }
 
 <div id="panel" style="display:none">
   <div class="top">
-    <h3>🚀 Panel Global SuperAdmin</h3>
+    <div>
+      <h3>🚀 Panel Global SuperAdmin</h3>
+      <div id="lastUpdate">—</div>
+    </div>
     <div class="btn-group">
-      <button class="btn btn-green" onclick="descargarBackup()">💾 Backup Global</button>
+      <button id="btnBackup" class="btn btn-green" onclick="descargarBackup()">💾 Backup Global</button>
+      <button id="btnActualizar" class="btn btn-white" onclick="recargarGlobal()">↻ Actualizar</button>
       <button class="btn btn-white" onclick="salir()">Cerrar Sesión</button>
     </div>
   </div>
