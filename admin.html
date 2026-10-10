@@ -23,6 +23,7 @@ body{background:#f1f5f9;padding:12px}
 .vendedor-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
 .search-box{width:100%;padding:12px;border-radius:10px;border:2px solid #0f172a;margin:10px 0;font-size:16px}
 .visita{background:white;padding:12px;border-radius:14px;margin:8px 0;display:flex;gap:10px;box-shadow:0 1px 4px #0001}
+.visita.bloqueada{background:#fafafa;border-left:3px solid #94a3b8}
 .visita img{width:70px;height:70px;object-fit:cover;border-radius:10px}
 .firma-mini{width:70px;height:40px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff}
 .rank{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:8px 4px}
@@ -40,6 +41,8 @@ body{background:#f1f5f9;padding:12px}
 .jornada-actual .btn{width:auto}
 .badge-abierta{display:inline-block;background:#16a34a;color:white;font-size:11px;padding:3px 9px;border-radius:20px;font-weight:bold;margin-left:6px}
 .badge-cerrada{display:inline-block;background:#94a3b8;color:white;font-size:11px;padding:3px 9px;border-radius:20px;font-weight:bold;margin-left:6px}
+.lock-badge{display:inline-block;background:#64748b;color:white;padding:3px 8px;border-radius:6px;font-size:10px;margin-left:6px;font-weight:bold}
+.aviso-cerrada{background:#f1f5f9;color:#475569;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:8px;border-left:3px solid #64748b}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -62,6 +65,7 @@ let miEmail = null;
 let autoRefreshTimer = null;
 let jornadaActual = null;
 let jornadasLista = [];
+let jornadaEstados = {};   // 👈 { "j_123": "abierta" | "cerrada" }
 let modoVista = 'jornada';
 let jornadaSeleccionada = null;
 let fechaSeleccionada = new Date();
@@ -98,6 +102,19 @@ function timestampAMillis(ts){
   if(ts.toMillis) return ts.toMillis();
   if(ts.toDate) return ts.toDate().getTime();
   return new Date(ts).getTime();
+}
+// 🕒 HORA REAL: viene de Firestore (serverTimestamp), no del celular
+function formatearHoraReal(d){
+  if(d.creado){
+    try {
+      const fecha = d.creado.toDate ? d.creado.toDate() : new Date(d.creado);
+      return fecha.toLocaleString('es-CO', {
+        day:'2-digit', month:'2-digit', year:'numeric',
+        hour:'2-digit', minute:'2-digit'
+      });
+    } catch(e){ /* cae al fallback */ }
+  }
+  return d.hora || '(sin fecha)';
 }
 
 // ==================== LOGIN ====================
@@ -153,6 +170,7 @@ window.entrarAdmin = async () => {
 // ==================== JORNADAS ====================
 async function cargarJornadas(){
   jornadasLista = [];
+  jornadaEstados = {};
   try {
     let snap;
     try {
@@ -169,7 +187,9 @@ async function cargarJornadas(){
       ));
     }
     snap.forEach(d => {
-      jornadasLista.push({ id: d.id, ...d.data() });
+      const j = { id: d.id, ...d.data() };
+      jornadasLista.push(j);
+      jornadaEstados[j.id] = j.estado;
     });
     jornadasLista.sort((a,b) => timestampAMillis(b.inicio) - timestampAMillis(a.inicio));
   } catch(e){
@@ -246,7 +266,7 @@ function renderizarSelectJornadas(){
   if(!sel) return;
   let html = '<option value="">— Selecciona una jornada —</option>';
   jornadasLista.forEach(j => {
-    const estado = j.estado === 'abierta' ? '🟢' : '🔴';
+    const estado = j.estado === 'abierta' ? '🟢' : '🔒';
     const fecha = formatearFecha(j.inicio);
     html += `<option value="${j.id}">${estado} ${j.nombre || 'Sin nombre'} · ${fecha}</option>`;
   });
@@ -297,12 +317,11 @@ window.confirmarNuevaJornada = async () => {
   }
 }
 
-// ✅ CORREGIDO: sin where(jornada_id), filtra empresa y cuenta en JS
 window.cerrarJornada = async (id) => {
-  if(!confirm('⚠️ ¿Cerrar la jornada actual?\n\nLos mensajeros ya no asociarán nuevas entregas a esta jornada.')) return;
+  if(!confirm('🔒 ¿Cerrar la jornada actual?\n\n⚠️ Una vez cerrada, sus entregas quedan BLOQUEADAS (no se podrán borrar ni editar).\n\nPodrás reabrirla después si necesitas hacer cambios.')) return;
 
   try {
-    // SOLO where(empresa_id) → evita error de permisos
+    // Contar entregas de esa jornada
     let rawSnap;
     try {
       rawSnap = await getDocsFromServer(query(
@@ -318,7 +337,6 @@ window.cerrarJornada = async (id) => {
       ));
     }
 
-    // Contar en JS las que son de esta jornada
     let total = 0;
     rawSnap.forEach(d => {
       if(d.data().jornada_id === id) total++;
@@ -333,7 +351,7 @@ window.cerrarJornada = async (id) => {
 
     await cargarJornadas();
     await cargarJornadaActual();
-    alert('🔒 Jornada cerrada.\n\nEntregas en esta jornada: ' + total);
+    alert('🔒 Jornada cerrada.\n\nEntregas en esta jornada: ' + total + '\n\nSus datos quedan bloqueados contra borrado.');
     await cargarLista();
   } catch(e){
     console.error(e);
@@ -346,8 +364,8 @@ window.reabrirJornada = async (id) => {
     alert('⚠️ Ya hay otra jornada abierta. Ciérrala primero.');
     return;
   }
-  if(!confirm('⚠️ ¿Reabrir esta jornada?\n\nVolverá a estar activa.')) return;
-  if(!confirm('🛑 CONFIRMACIÓN FINAL\n\n¿Estás completamente seguro?')) return;
+  if(!confirm('🔓 ¿Reabrir esta jornada?\n\nVolverá a estar activa y sus entregas podrán editarse/borrarse de nuevo.')) return;
+  if(!confirm('🛑 CONFIRMACIÓN FINAL\n\n¿Estás completamente seguro de reabrir?')) return;
 
   try {
     await updateDoc(doc(db, "jornadas", id), {
@@ -525,24 +543,52 @@ window.cambiarTab = (tab) => {
   document.getElementById('tabHistorial').style.color = tab === 'hoy' ? '#0f172a' : 'white';
 }
 
-// ==================== TARJETA ====================
+// ==================== TARJETA (con hora real + candado) ====================
 function tarjetaVisita(d, docId){
   const estadoColor = d.estado === 'Entregado' ? '#16a34a' : (d.estado === 'Rechazado' ? '#dc2626' : '#ea580c');
   const foto  = d.foto  || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="70"><rect width="70" height="70" fill="%23e2e8f0"/></svg>';
   const firma = d.firma || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="40"><rect width="70" height="40" fill="%23f1f5f9"/></svg>';
   const guiaSegura = (d.guia || '').replace(/'/g, '').replace(/"/g, '');
+
+  // 🕒 Hora real (de Firestore)
+  const horaReal = formatearHoraReal(d);
+
+  // 🔒 Verificar si la jornada está cerrada
+  const estadoJornada = d.jornada_id ? jornadaEstados[d.jornada_id] : null;
+  const cerrada = estadoJornada === 'cerrada';
+
   const jornadaBadge = d.jornada_id
-    ? `<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:20px;font-size:10px;margin-left:4px">📋 ${d.jornada_nombre || 'jornada'}</span>`
+    ? `<span style="background:${cerrada?'#e2e8f0':'#dbeafe'};color:${cerrada?'#475569':'#1e40af'};padding:2px 8px;border-radius:20px;font-size:10px;margin-left:4px">${cerrada?'🔒':'📋'} ${d.jornada_nombre || 'jornada'}</span>`
     : `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:20px;font-size:10px;margin-left:4px">⚠️ Sin jornada</span>`;
-  return `<div class="visita"><img src="${foto}"><div style="flex:1"><b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span>${jornadaBadge}<br><small>👤 ${d.cliente||''}</small><br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><div style="margin-top:5px; display:flex; gap:10px; flex-wrap:wrap"><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Mapa</a><button onclick="descargarPDF('${docId}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#0f172a; color:white; border:none; border-radius:6px">📄 PDF</button><button onclick="eliminarEntrega('${docId}', '${guiaSegura}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#dc2626; color:white; border:none; border-radius:6px">🗑️ Borrar</button></div></div><img class="firma-mini" src="${firma}"></div>`;
+
+  const botonBorrar = cerrada
+    ? `<button disabled title="La jornada está cerrada. Reábrela para poder borrar." style="font-size:11px; padding:4px 8px; background:#cbd5e1; color:#475569; border:none; border-radius:6px; cursor:not-allowed">🔒 Cerrada</button>`
+    : `<button onclick="eliminarEntrega('${docId}', '${guiaSegura}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#dc2626; color:white; border:none; border-radius:6px">🗑️ Borrar</button>`;
+
+  return `<div class="visita ${cerrada?'bloqueada':''}">
+    <img src="${foto}">
+    <div style="flex:1">
+      <b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span>${jornadaBadge}
+      <br><small>👤 ${d.cliente||''}</small>
+      <br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span>
+      <br><small>🕒 ${horaReal}</small>
+      <br><div style="margin-top:5px; display:flex; gap:10px; flex-wrap:wrap">
+        <a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Mapa</a>
+        <button onclick="descargarPDF('${docId}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#0f172a; color:white; border:none; border-radius:6px">📄 PDF</button>
+        ${botonBorrar}
+      </div>
+    </div>
+    <img class="firma-mini" src="${firma}">
+  </div>`;
 }
 
 // ==================== CARGAR LISTA ====================
 async function cargarLista(){
   let snap;
+  let esVistaCerrada = false;
+
   try {
     if(modoVista === 'jornada' && jornadaSeleccionada){
-      // ✅ CORREGIDO: solo where(empresa_id), filtramos jornada en JS
       let rawSnap;
       try {
         rawSnap = await getDocsFromServer(query(
@@ -564,6 +610,7 @@ async function cargarLista(){
       });
       arr.sort((a,b) => timestampAMillis(b.data.creado) - timestampAMillis(a.data.creado));
       snap = { forEach: cb => arr.forEach(x => cb({ id: x.id, data: () => x.data })) , size: arr.length };
+      esVistaCerrada = jornadaEstados[jornadaSeleccionada] === 'cerrada';
 
     } else if(modoVista === 'fecha'){
       const inicio = new Date(fechaSeleccionada); inicio.setHours(0,0,0,0);
@@ -655,7 +702,14 @@ async function cargarLista(){
   if(modoVista === 'fecha') vacio = 'No hay entregas en esa fecha';
   if(modoVista === 'sinjornada') vacio = 'No hay entregas sin jornada';
 
-  document.getElementById('lista').innerHTML = htmlVisitas || vacio;
+  let avisoCerrada = '';
+  if(esVistaCerrada){
+    avisoCerrada = `<div class="aviso-cerrada">
+      🔒 <b>Jornada cerrada.</b> Las entregas de esta jornada están bloqueadas contra borrado. Para editarlas, primero reabre la jornada desde el dropdown.
+    </div>`;
+  }
+
+  document.getElementById('lista').innerHTML = avisoCerrada + (htmlVisitas || vacio);
   actualizarUltimaSync();
 }
 
@@ -748,6 +802,12 @@ window.filtrarEntregas = async () => {
 
 // ==================== ELIMINAR ====================
 window.eliminarEntrega = async (docId, guia) => {
+  const d = entregasPorId[docId];
+  if(d && d.jornada_id && jornadaEstados[d.jornada_id] === 'cerrada'){
+    alert('🔒 No se puede borrar.\n\nEsta entrega pertenece a una jornada CERRADA.\n\nPara borrarla, reabre primero la jornada desde el dropdown.');
+    return;
+  }
+
   if(!confirm(`⚠️ ¿Borrar la entrega "${guia || docId}"?\n\nEsta acción NO se puede deshacer.`)) return;
 
   try {
@@ -755,8 +815,8 @@ window.eliminarEntrega = async (docId, guia) => {
     await cargarLista();
     await cargarHistorial(true);
   } catch(e) {
-    if(e.code === 'permission-denied'){
-      alert('❌ No tienes permiso para borrar.');
+    if(e.code === 'permission-denied' || (e.message && e.message.includes('permission'))){
+      alert('🔒 No se puede borrar.\n\nEsta entrega pertenece a una jornada cerrada.');
     } else {
       alert('Error: ' + e.message);
     }
@@ -777,7 +837,7 @@ window.descargarPDF = async (docId) => {
   docPdf.text(`Estado: ${d.estado || ''}`, 20, 49);
   docPdf.text(`Mensajero: ${d.vendedor || ''}`, 20, 56);
   docPdf.text(`Jornada: ${d.jornada_nombre || 'Sin jornada'}`, 20, 63);
-  docPdf.text(`Fecha y Hora: ${d.hora || ''}`, 20, 70);
+  docPdf.text(`Fecha y Hora: ${formatearHoraReal(d)}`, 20, 70);
   docPdf.text(`Ubicación: ${d.lat || ''}, ${d.lng || ''}`, 20, 77);
 
   try {
@@ -799,7 +859,8 @@ window.descargarExcel = () => {
     Estado: d.estado || '',
     Receptor: d.cliente || '',
     Firmado: d.firma ? 'Sí' : 'No',
-    Fecha: d.hora || '',
+    'Fecha real': formatearHoraReal(d),
+    'Hora del dispositivo': d.hora || '',
     Mapa: `https://www.google.com/maps?q=${d.lat || ''},${d.lng || ''}`
   }));
   const ws = XLSX.utils.json_to_sheet(datosExcel);
