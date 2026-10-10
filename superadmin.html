@@ -16,20 +16,26 @@ body{background:#f1f5f9;padding:12px}
 .card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
 .card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px;cursor:pointer}
 .login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px;box-shadow:0 4px 10px rgba(0,0,0,0.1)}
-.login input{width:100%;padding:14px;border-//CORTADO’ radius:12px;border:1px solid #e2e8f0;margin:6px 0}
+.login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
 .login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px;cursor:pointer}
-.item-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #f1f5f9;font-size:14px}
-.btn-group{display:flex;gap:5px}
+.item-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #f1f5f9;font-size:14px;gap:8px;flex-wrap:wrap}
+.btn-group{display:flex;gap:5px;flex-wrap:wrap}
+.sep{border:none;border-top:1px solid #e2e8f0;margin:12px 0}
+.hint{font-size:13px;color:#64748b;margin:6px 0}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, Timestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+
+const secondaryApp  = initializeApp(firebaseConfig, "Secondary");
+const secondaryAuth = getAuth(secondaryApp);
+await setPersistence(secondaryAuth, inMemoryPersistence);
 
 window.entrarSuper = async () => {
   const email = document.getElementById('email').value.trim();
@@ -61,7 +67,7 @@ async function cargarGlobal(){
     empSnap.forEach(d => {
       const data = d.data();
       htmlEmp += `<div class="item-row">
-        <span><b>${data.empresa_nombre || 'S/N'}</b> - ${data.activa ? '✅ Activa' : '❌ Inactiva'}</span>
+        <span><b>${data.empresa_nombre || 'S/N'}</b> <small style="color:#64748b">(${d.id})</small> - ${data.activa ? '✅ Activa' : '❌ Inactiva'}</span>
         <div class="btn-group">
           <button class="btn ${data.activa ? 'btn-red' : 'btn-blue'}" onclick="toggleEmpresa('${d.id}', ${data.activa})">${data.activa ? 'Suspender' : 'Activar'}</button>
           <button class="btn btn-red" onclick="eliminarEmpresa('${d.id}')">🗑️</button>
@@ -69,7 +75,10 @@ async function cargarGlobal(){
       </div>`;
     });
     document.getElementById('listaEmp').innerHTML = htmlEmp || 'No hay empresas';
-  } catch(e) { document.getElementById('listaEmp').innerHTML = 'Error al cargar'; }
+  } catch(e) {
+    console.error(e);
+    document.getElementById('listaEmp').innerHTML = 'Error al cargar: ' + e.message;
+  }
 }
 
 window.toggleEmpresa = async (id, estadoActual) => {
@@ -80,7 +89,7 @@ window.toggleEmpresa = async (id, estadoActual) => {
 }
 
 window.eliminarEmpresa = async (id) => {
-  if(confirm(`¿Eliminar la empresa permanentemente?`)){
+  if(confirm(`¿Eliminar la empresa permanentemente?\n(Los usuarios y entregas NO se borran)`)){
     await deleteDoc(doc(db, "empresas", id));
     cargarGlobal();
   }
@@ -88,18 +97,63 @@ window.eliminarEmpresa = async (id) => {
 
 window.crearEmpresa = async () => {
   const nombre = document.getElementById('empNombre').value.trim();
-  const idEmp = document.getElementById('empId').value.trim();
-  if(!nombre || !idEmp){ alert('Completa los datos'); return; }
+  const idEmp  = document.getElementById('empId').value.trim();
+  const aEmail = document.getElementById('adminEmail').value.trim();
+  const aPass  = document.getElementById('adminPass').value.trim();
+
+  if(!nombre || !idEmp || !aEmail || !aPass){
+    alert('Completa todos los campos'); return;
+  }
+  if(aPass.length < 6){
+    alert('La contraseña debe tener al menos 6 caracteres'); return;
+  }
+  if(!/^[a-z0-9\-]+$/.test(idEmp)){
+    alert('El ID solo puede tener letras minúsculas, números y guiones. Ejemplo: distribuidora-norte');
+    return;
+  }
+
   try {
-    await setDoc(doc(db, "empresas", idEmp), {
+    const empRef = doc(db, "empresas", idEmp);
+    const empSnap = await getDoc(empRef);
+    if(empSnap.exists()){
+      alert('⚠️ Ya existe una empresa con ese ID. Usa otro.');
+      return;
+    }
+
+    // 1) Crear la empresa
+    await setDoc(empRef, {
       empresa_nombre: nombre,
       activa: true,
       creada: Timestamp.now()
     });
-    alert('✅ Empresa creada');
-    document.getElementById('empNombre').value = ''; document.getElementById('empId').value = '';
+
+    // 2) Crear admin en Auth (app secundaria para no perder sesión superadmin)
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, aEmail, aPass);
+
+    // 3) Crear perfil en /usuarios
+    await setDoc(doc(db, "usuarios", cred.user.uid), {
+      email: aEmail,
+      rol: "admin",
+      empresa_id: idEmp,
+      empresa_nombre: nombre,
+      creado: Timestamp.now()
+    });
+
+    await signOut(secondaryAuth);
+
+    alert(`✅ Empresa "${nombre}" creada con admin ${aEmail}.\nEl admin ya puede entrar en admin.html`);
+    document.getElementById('empNombre').value  = '';
+    document.getElementById('empId').value      = '';
+    document.getElementById('adminEmail').value = '';
+    document.getElementById('adminPass').value  = '';
     cargarGlobal();
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) {
+    if(e.code === 'auth/email-already-in-use'){
+      alert('⚠️ Ese correo ya está registrado en Authentication. Usa otro correo para el admin.');
+    } else {
+      alert('Error: ' + e.code + ' — ' + e.message);
+    }
+  }
 }
 
 window.descargarBackup = async () => {
@@ -115,7 +169,14 @@ window.descargarBackup = async () => {
 
 window.salir = () => { signOut(auth).then(() => location.reload()); }
 </script></head><body>
-<div id="login" class="login"><h2 style="text-align:center">TrazaGO</h2><p style="text-align:center; color:gray">Acceso Super Admin</p><br><input id="email" placeholder="Correo"><input id="pass" type="password" placeholder="Contraseña"><button onclick="entrarSuper()">Entrar al Sistema</button><p id="err" style="color:red; text-align:center"></p></div>
+<div id="login" class="login">
+  <h2 style="text-align:center">TrazaGO</h2>
+  <p style="text-align:center; color:gray">Acceso Super Admin</p><br>
+  <input id="email" placeholder="Correo">
+  <input id="pass" type="password" placeholder="Contraseña">
+  <button onclick="entrarSuper()">Entrar al Sistema</button>
+  <p id="err" style="color:red; text-align:center"></p>
+</div>
 <div id="panel" style="display:none">
   <div class="top">
     <h3>🚀 Panel Global SuperAdmin</h3>
@@ -130,10 +191,15 @@ window.salir = () => { signOut(auth).then(() => location.reload()); }
     <div class="stat"><b id="totalUsu">0</b><small>Usuarios Totales</small></div>
   </div>
   <div class="card">
-    <h4>🏢 Crear Nueva Empresa</h4>
-    <input id="empNombre" placeholder="Nombre de la Empresa">
-    <input id="empId" placeholder="ID Único de la Empresa">
-    <button onclick="crearEmpresa()">Registrar Empresa</button>
+    <h4>🏢 Crear Nueva Empresa + Admin</h4>
+    <input id="empNombre" placeholder="Nombre de la Empresa (ej: Distribuidora Norte)">
+    <input id="empId" placeholder="ID único (ej: distribuidora-norte)">
+    <p class="hint">El ID solo puede tener letras minúsculas, números y guiones</p>
+    <hr class="sep">
+    <p class="hint" style="font-weight:bold;color:#0f172a">👤 Admin inicial de esta empresa:</p>
+    <input id="adminEmail" placeholder="Correo del admin">
+    <input id="adminPass" type="password" placeholder="Contraseña (mín. 6 caracteres)">
+    <button onclick="crearEmpresa()">Registrar Empresa + Admin</button>
   </div>
   <div class="card">
     <h4>📋 Gestión de Empresas</h4>
