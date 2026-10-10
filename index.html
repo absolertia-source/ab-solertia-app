@@ -3,10 +3,10 @@
 <meta name="description" content="Sistema de registro y georreferenciación de entregas de pedidos.">
 <meta name="theme-color" content="#0f172a">
 <link rel="manifest" href="/manifest.json">
-<style>*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#f1f5f9;padding:12px}.login{max-width:360px;margin:40px auto;background:white;padding:24px;border-radius:20px}.card{background:white;padding:14px;border-radius:16px;margin:10px 0}input,button,select{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}button{background:#0f172a;color:white;font-weight:bold;border:none}button:disabled{opacity:0.6;cursor:not-allowed}.top{display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:white;padding:12px;border-radius:12px}#gpsStat{font-size:12px;padding:10px;background:#fef3c7;border-radius:8px;margin:8px 0}#offlineAlert{display:none;background:#dc2626;color:white;padding:10px;border-radius:12px;text-align:center;font-size:13px;margin-bottom:10px;font-weight:bold}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#f1f5f9;padding:12px}.login{max-width:360px;margin:40px auto;background:white;padding:24px;border-radius:20px}.card{background:white;padding:14px;border-radius:16px;margin:10px 0}input,button,select{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}button{background:#0f172a;color:white;font-weight:bold;border:none}button:disabled{opacity:0.6;cursor:not-allowed}.top{display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:white;padding:12px;border-radius:12px}#gpsStat{font-size:12px;padding:10px;background:#fef3c7;border-radius:8px;margin:8px 0}#offlineAlert{display:none;background:#dc2626;color:white;padding:10px;border-radius:12px;text-align:center;font-size:13px;margin-bottom:10px;font-weight:bold}#jornadaBar{display:none;background:#dcfce7;color:#166534;padding:10px;border-radius:12px;text-align:center;font-size:13px;margin-bottom:10px;font-weight:bold;border:1px solid #86efac}#jornadaBar.sinJornada{background:#fef3c7;color:#92400e;border-color:#fcd34d}</style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, getDocsFromServer, query, where, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
@@ -14,36 +14,82 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// --- Variables globales ---
 let fotoBase='', lat=7.8897, lng=-72.4967;
 let gpsValido=true;
 let miEmpresaId=null;
 let firmaBase='', dibujando=false, firmaCtx=null;
-let entregaIdActual = null;   // 👈 ID único de la entrega que se está creando
+let entregaIdActual = null;
+let jornadaActual = null;   // { id, nombre } o null
 
-// --- Función para generar ID único de entrega (seguro y no colisiona) ---
 function generarIdEntrega(){
   return 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
 }
 
 // --- API expuesta a window ---
-// 👇 Ahora usa setDoc con id (idempotente: subir 2 veces = 1 solo documento)
 window.guardarFirebase = async (d, id) => {
-  const { _id, ...dataLimpia } = d;   // quitamos metadatos locales
+  const { _id, ...dataLimpia } = d;
   return await setDoc(doc(db, "visitas", id), { ...dataLimpia, creado: serverTimestamp() });
 }
 window.loginFirebase = async (email, pass) => { return await signInWithEmailAndPassword(auth, email, pass); }
 window.logoutFirebase = async () => { return await signOut(auth); }
 window.getUsuarioDoc = async (uid) => { return await getDoc(doc(db, "usuarios", uid)); }
-window.getEmpresaDoc = async (empresaId) => { return await getDoc(doc(db, "empresas", empresaId)); }
 window.recuperarClave = async (email) => { return await sendPasswordResetEmail(auth, email); }
 window.registrarError = async (contexto, mensaje) => {
   try{ await addDoc(collection(db,"errores"), { app:'index', contexto, mensaje, usuario: localStorage.getItem('ab_vend')||'', empresa_id: localStorage.getItem('ab_empresa')||'', fecha: serverTimestamp() }); }catch(e){}
 }
 
-// ================================================================
-// FUNCIONES INTERNAS
-// ================================================================
+// --- Leer jornada abierta de la empresa ---
+async function cargarJornadaAbierta(){
+  try {
+    let snap;
+    try {
+      snap = await getDocsFromServer(query(
+        collection(db, "jornadas"),
+        where("empresa_id", "==", miEmpresaId),
+        where("estado", "==", "abierta"),
+        limit(1)
+      ));
+    } catch(e){
+      snap = await getDocs(query(
+        collection(db, "jornadas"),
+        where("empresa_id", "==", miEmpresaId),
+        where("estado", "==", "abierta"),
+        limit(1)
+      ));
+    }
+
+    if(!snap.empty){
+      const doc0 = snap.docs[0];
+      jornadaActual = { id: doc0.id, nombre: doc0.data().nombre || 'Jornada sin nombre' };
+      localStorage.setItem('ab_jornada_id', jornadaActual.id);
+      localStorage.setItem('ab_jornada_nombre', jornadaActual.nombre);
+    } else {
+      jornadaActual = null;
+      localStorage.removeItem('ab_jornada_id');
+      localStorage.removeItem('ab_jornada_nombre');
+    }
+  } catch(e){
+    console.warn('No se pudo leer jornada, uso la cacheada', e);
+    const id = localStorage.getItem('ab_jornada_id');
+    const nombre = localStorage.getItem('ab_jornada_nombre');
+    if(id && nombre) jornadaActual = { id, nombre };
+    else jornadaActual = null;
+  }
+  mostrarBarraJornada();
+}
+
+function mostrarBarraJornada(){
+  const bar = document.getElementById('jornadaBar');
+  if(!bar) return;
+  if(jornadaActual){
+    bar.className = '';
+    bar.innerHTML = '🟢 Trabajando en: <b>' + jornadaActual.nombre + '</b>';
+  } else {
+    bar.className = 'sinJornada';
+    bar.innerHTML = '🟡 Sin jornada abierta · Tus entregas quedarán como "sin jornada"';
+  }
+  bar.style.display = 'block';
+}
 
 function chequearConexion(){
   const alertEl = document.getElementById('offlineAlert');
@@ -56,6 +102,7 @@ function mostrarApp(){
   document.getElementById('info').innerText = localStorage.getItem('ab_vend') || '';
   chequearConexion();
   sincronizarPendientes();
+  cargarJornadaAbierta();
 }
 
 async function sincronizarPendientes(){
@@ -67,7 +114,6 @@ async function sincronizarPendientes(){
   const restantes = [];
   for(let i=0; i<pendientes.length; i++){
     const p = pendientes[i];
-    // Si por alguna razón no tiene _id (entregas viejas antes del fix), le generamos uno
     const idFinal = p._id || generarIdEntrega();
     try{
       await window.guardarFirebase(p, idFinal);
@@ -84,10 +130,6 @@ async function sincronizarPendientes(){
     alert('⚠️ Se subieron ' + (pendientes.length - restantes.length) + ' y quedan ' + restantes.length + ' pendientes.');
   }
 }
-
-// ================================================================
-// FUNCIONES EXPUESTAS A WINDOW
-// ================================================================
 
 // --- Autenticación reactiva ---
 onAuthStateChanged(auth, async (user) => {
@@ -147,16 +189,16 @@ window.salir = () => {
   window.logoutFirebase().then(() => {
     localStorage.removeItem('ab_vend');
     localStorage.removeItem('ab_empresa');
+    localStorage.removeItem('ab_jornada_id');
+    localStorage.removeItem('ab_jornada_nombre');
     location.reload();
   });
 }
 
 window.nueva = () => {
-  // 🔑 Genera el ID único para esta entrega
   entregaIdActual = generarIdEntrega();
-  console.log('Nueva entrega con ID: ' + entregaIdActual);
+  console.log('Nueva entrega ID: ' + entregaIdActual + ' | Jornada: ' + (jornadaActual?.id || 'SIN JORNADA'));
 
-  // Limpiar el formulario por si quedó algo de la vez anterior
   document.getElementById('guia').value = '';
   document.getElementById('cli').value = '';
   document.getElementById('estado').value = 'Entregado';
@@ -192,8 +234,6 @@ window.nueva = () => {
 
 window.guardar = async () => {
   const btn = document.getElementById('btnGuardar');
-
-  // 🛡️ Guardia 1: evita doble clic
   if(btn && btn.disabled) return;
 
   if(!auth.currentUser){
@@ -202,10 +242,8 @@ window.guardar = async () => {
     return;
   }
 
-  // 🛡️ Guardia 2: valida que exista un ID generado
   if(!entregaIdActual){
     entregaIdActual = generarIdEntrega();
-    console.log('ID generado en guardar(): ' + entregaIdActual);
   }
 
   const guia = document.getElementById('guia').value.trim();
@@ -215,7 +253,9 @@ window.guardar = async () => {
     alert('Completa todos los campos y la firma'); return;
   }
 
-  // 🔒 Deshabilitar el botón mientras se procesa
+  // 🔄 Re-verificar jornada (por si abrieron/cerraron mientras el vendedor tenía el form abierto)
+  await cargarJornadaAbierta();
+
   if(btn){
     btn.disabled = true;
     btn.innerText = 'Guardando...';
@@ -227,12 +267,13 @@ window.guardar = async () => {
     guia: guia, cliente: cli, estado: estado,
     foto: fotoBase, firma: firmaBase,
     lat: lat, lng: lng, gpsValido: gpsValido,
-    hora: new Date().toLocaleString()
+    hora: new Date().toLocaleString(),
+    jornada_id: jornadaActual ? jornadaActual.id : null,   // 👈 campo nuevo
+    jornada_nombre: jornadaActual ? jornadaActual.nombre : null
   };
 
   try {
     if(!navigator.onLine){
-      // Guardar pendiente con su ID para subirlo idéntico al reconectar
       const pendientes = JSON.parse(localStorage.getItem('pendientes_traza') || '[]');
       pendientes.push({ ...dato, _id: entregaIdActual });
       localStorage.setItem('pendientes_traza', JSON.stringify(pendientes));
@@ -240,17 +281,19 @@ window.guardar = async () => {
     } else {
       try{
         await window.guardarFirebase(dato, entregaIdActual);
-        alert('¡Entrega Registrada!');
+        if(jornadaActual){
+          alert('¡Entrega Registrada!\n\n📋 Jornada: ' + jornadaActual.nombre);
+        } else {
+          alert('¡Entrega Registrada!\n\n⚠️ Quedó SIN jornada asignada.');
+        }
       } catch(e){
-        // Si falla por red, guardar como pendiente para reintentar
         const pendientes = JSON.parse(localStorage.getItem('pendientes_traza') || '[]');
         pendientes.push({ ...dato, _id: entregaIdActual });
         localStorage.setItem('pendientes_traza', JSON.stringify(pendientes));
-        alert('⚠️ Error al subir ('+e.message+'). Se guardó localmente y se reintentará.');
+        alert('⚠️ Error al subir ('+e.message+'). Se guardó localmente.');
       }
     }
 
-    // Cerrar y limpiar
     document.getElementById('formVis').style.display='none';
     document.getElementById('guia').value='';
     document.getElementById('cli').value='';
@@ -259,9 +302,8 @@ window.guardar = async () => {
     document.getElementById('fotoFile').value = '';
     fotoBase='';
     window.limpiarFirma();
-    entregaIdActual = null;   // se regenerará la próxima vez
+    entregaIdActual = null;
   } finally {
-    // 🔓 Rehabilitar el botón pase lo que pase
     if(btn){
       btn.disabled = false;
       btn.innerText = 'Guardar Entrega';
@@ -274,10 +316,6 @@ window.limpiarFirma = function(){
   if(firmaCtx) firmaCtx.clearRect(0,0,canvas.width,canvas.height);
   firmaBase='';
 }
-
-// ================================================================
-// Inicialización de firma y compresión de foto
-// ================================================================
 
 function initFirma(){
   const canvas = document.getElementById('firmaCanvas');
@@ -317,12 +355,12 @@ document.getElementById('fotoFile').addEventListener('change', e => {
   img.src = URL.createObjectURL(file);
 });
 
-// --- Auto-sync al recuperar conexión ---
-window.addEventListener('online',  () => { chequearConexion(); sincronizarPendientes(); });
+window.addEventListener('online',  () => { chequearConexion(); sincronizarPendientes(); cargarJornadaAbierta(); });
 window.addEventListener('offline', chequearConexion);
 
 </script></head><body>
 <div id="offlineAlert">⚠️ Modo Offline: Los datos se guardarán localmente y se subirán al recuperar conexión.</div>
+<div id="jornadaBar"></div>
 <div id="login" class="login">
   <h2>TrazaGO</h2>
   <small>Mensajeros / Entregadores</small><br><br>
