@@ -3,10 +3,10 @@
 <meta name="description" content="Sistema de registro y georreferenciación de entregas de pedidos.">
 <meta name="theme-color" content="#0f172a">
 <link rel="manifest" href="/manifest.json">
-<style>*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#f1f5f9;padding:12px}.login{max-width:360px;margin:40px auto;background:white;padding:24px;border-radius:20px}.card{background:white;padding:14px;border-radius:16px;margin:10px 0}input,button,select{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}button{background:#0f172a;color:white;font-weight:bold;border:none}.top{display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:white;padding:12px;border-radius:12px}#gpsStat{font-size:12px;padding:10px;background:#fef3c7;border-radius:8px;margin:8px 0}#offlineAlert{display:none;background:#dc2626;color:white;padding:10px;border-radius:12px;text-align:center;font-size:13px;margin-bottom:10px;font-weight:bold}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#f1f5f9;padding:12px}.login{max-width:360px;margin:40px auto;background:white;padding:24px;border-radius:20px}.card{background:white;padding:14px;border-radius:16px;margin:10px 0}input,button,select{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}button{background:#0f172a;color:white;font-weight:bold;border:none}button:disabled{opacity:0.6;cursor:not-allowed}.top{display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:white;padding:12px;border-radius:12px}#gpsStat{font-size:12px;padding:10px;background:#fef3c7;border-radius:8px;margin:8px 0}#offlineAlert{display:none;background:#dc2626;color:white;padding:10px;border-radius:12px;text-align:center;font-size:13px;margin-bottom:10px;font-weight:bold}</style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
@@ -19,9 +19,19 @@ let fotoBase='', lat=7.8897, lng=-72.4967;
 let gpsValido=true;
 let miEmpresaId=null;
 let firmaBase='', dibujando=false, firmaCtx=null;
+let entregaIdActual = null;   // 👈 ID único de la entrega que se está creando
+
+// --- Función para generar ID único de entrega (seguro y no colisiona) ---
+function generarIdEntrega(){
+  return 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+}
 
 // --- API expuesta a window ---
-window.guardarFirebase = async (d) => { return await addDoc(collection(db,"visitas"), {...d, creado: serverTimestamp()}); }
+// 👇 Ahora usa setDoc con id (idempotente: subir 2 veces = 1 solo documento)
+window.guardarFirebase = async (d, id) => {
+  const { _id, ...dataLimpia } = d;   // quitamos metadatos locales
+  return await setDoc(doc(db, "visitas", id), { ...dataLimpia, creado: serverTimestamp() });
+}
 window.loginFirebase = async (email, pass) => { return await signInWithEmailAndPassword(auth, email, pass); }
 window.logoutFirebase = async () => { return await signOut(auth); }
 window.getUsuarioDoc = async (uid) => { return await getDoc(doc(db, "usuarios", uid)); }
@@ -32,7 +42,7 @@ window.registrarError = async (contexto, mensaje) => {
 }
 
 // ================================================================
-// FUNCIONES INTERNAS (no llamadas desde HTML, solo desde JS)
+// FUNCIONES INTERNAS
 // ================================================================
 
 function chequearConexion(){
@@ -56,11 +66,14 @@ async function sincronizarPendientes(){
   console.log('Sincronizando ' + pendientes.length + ' entregas...');
   const restantes = [];
   for(let i=0; i<pendientes.length; i++){
+    const p = pendientes[i];
+    // Si por alguna razón no tiene _id (entregas viejas antes del fix), le generamos uno
+    const idFinal = p._id || generarIdEntrega();
     try{
-      await window.guardarFirebase(pendientes[i]);
+      await window.guardarFirebase(p, idFinal);
     } catch(e){
       console.error('Error subiendo pendiente', e);
-      restantes.push(pendientes[i]);
+      restantes.push(p);
     }
   }
   if(restantes.length === 0){
@@ -73,7 +86,7 @@ async function sincronizarPendientes(){
 }
 
 // ================================================================
-// FUNCIONES EXPUESTAS A WINDOW (las llama el HTML con onclick)
+// FUNCIONES EXPUESTAS A WINDOW
 // ================================================================
 
 // --- Autenticación reactiva ---
@@ -103,7 +116,6 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-// ✅ expuesta
 window.entrar = async () => {
   const email=document.getElementById('emp').value.trim();
   const p=document.getElementById('pass').value.trim();
@@ -111,7 +123,6 @@ window.entrar = async () => {
   err.innerText='';
   try{
     await window.loginFirebase(email, p);
-    // onAuthStateChanged se encarga del resto
   } catch(e){
     if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'){
       err.innerText='Correo o contraseña incorrectos';
@@ -125,7 +136,6 @@ window.entrar = async () => {
   }
 }
 
-// ✅ expuesta
 window.olvide = async () => {
   const email = document.getElementById('emp').value.trim();
   if(!email){ alert('Escribe tu correo arriba primero'); return; }
@@ -133,7 +143,6 @@ window.olvide = async () => {
   catch(e){ alert('Error: '+e.code); }
 }
 
-// ✅ expuesta
 window.salir = () => {
   window.logoutFirebase().then(() => {
     localStorage.removeItem('ab_vend');
@@ -142,8 +151,21 @@ window.salir = () => {
   });
 }
 
-// ✅ expuesta
 window.nueva = () => {
+  // 🔑 Genera el ID único para esta entrega
+  entregaIdActual = generarIdEntrega();
+  console.log('Nueva entrega con ID: ' + entregaIdActual);
+
+  // Limpiar el formulario por si quedó algo de la vez anterior
+  document.getElementById('guia').value = '';
+  document.getElementById('cli').value = '';
+  document.getElementById('estado').value = 'Entregado';
+  document.getElementById('prevFoto').style.display = 'none';
+  document.getElementById('infoFoto').innerText = '';
+  document.getElementById('fotoFile').value = '';
+  fotoBase = '';
+  firmaBase = '';
+
   document.getElementById('formVis').style.display='block';
   document.getElementById('gpsStat').innerText='📡 Buscando GPS...';
   document.getElementById('gpsStat').style.background='#fef3c7';
@@ -168,12 +190,22 @@ window.nueva = () => {
   }
 }
 
-// ✅ expuesta
 window.guardar = async () => {
+  const btn = document.getElementById('btnGuardar');
+
+  // 🛡️ Guardia 1: evita doble clic
+  if(btn && btn.disabled) return;
+
   if(!auth.currentUser){
     alert('Tu sesión expiró. Vuelve a entrar.');
     location.reload();
     return;
+  }
+
+  // 🛡️ Guardia 2: valida que exista un ID generado
+  if(!entregaIdActual){
+    entregaIdActual = generarIdEntrega();
+    console.log('ID generado en guardar(): ' + entregaIdActual);
   }
 
   const guia = document.getElementById('guia').value.trim();
@@ -181,6 +213,12 @@ window.guardar = async () => {
   const estado = document.getElementById('estado').value;
   if(!guia || !cli || !fotoBase || !firmaBase){
     alert('Completa todos los campos y la firma'); return;
+  }
+
+  // 🔒 Deshabilitar el botón mientras se procesa
+  if(btn){
+    btn.disabled = true;
+    btn.innerText = 'Guardando...';
   }
 
   const dato = {
@@ -192,32 +230,45 @@ window.guardar = async () => {
     hora: new Date().toLocaleString()
   };
 
-  if(!navigator.onLine){
-    const pendientes = JSON.parse(localStorage.getItem('pendientes_traza') || '[]');
-    pendientes.push(dato);
-    localStorage.setItem('pendientes_traza', JSON.stringify(pendientes));
-    alert('📡 Sin internet. Entrega guardada localmente y se subirá al conectar.');
-  } else {
-    try{
-      await window.guardarFirebase(dato);
-      alert('¡Entrega Registrada!');
-    } catch(e){
+  try {
+    if(!navigator.onLine){
+      // Guardar pendiente con su ID para subirlo idéntico al reconectar
       const pendientes = JSON.parse(localStorage.getItem('pendientes_traza') || '[]');
-      pendientes.push(dato);
+      pendientes.push({ ...dato, _id: entregaIdActual });
       localStorage.setItem('pendientes_traza', JSON.stringify(pendientes));
-      alert('⚠️ Error al subir ('+e.message+'). Se guardó localmente.');
+      alert('📡 Sin internet. Entrega guardada localmente y se subirá al conectar.');
+    } else {
+      try{
+        await window.guardarFirebase(dato, entregaIdActual);
+        alert('¡Entrega Registrada!');
+      } catch(e){
+        // Si falla por red, guardar como pendiente para reintentar
+        const pendientes = JSON.parse(localStorage.getItem('pendientes_traza') || '[]');
+        pendientes.push({ ...dato, _id: entregaIdActual });
+        localStorage.setItem('pendientes_traza', JSON.stringify(pendientes));
+        alert('⚠️ Error al subir ('+e.message+'). Se guardó localmente y se reintentará.');
+      }
+    }
+
+    // Cerrar y limpiar
+    document.getElementById('formVis').style.display='none';
+    document.getElementById('guia').value='';
+    document.getElementById('cli').value='';
+    document.getElementById('prevFoto').style.display='none';
+    document.getElementById('infoFoto').innerText = '';
+    document.getElementById('fotoFile').value = '';
+    fotoBase='';
+    window.limpiarFirma();
+    entregaIdActual = null;   // se regenerará la próxima vez
+  } finally {
+    // 🔓 Rehabilitar el botón pase lo que pase
+    if(btn){
+      btn.disabled = false;
+      btn.innerText = 'Guardar Entrega';
     }
   }
-
-  document.getElementById('formVis').style.display='none';
-  document.getElementById('guia').value='';
-  document.getElementById('cli').value='';
-  document.getElementById('prevFoto').style.display='none';
-  fotoBase='';
-  window.limpiarFirma();
 }
 
-// ✅ expuesta
 window.limpiarFirma = function(){
   const canvas = document.getElementById('firmaCanvas');
   if(firmaCtx) firmaCtx.clearRect(0,0,canvas.width,canvas.height);
@@ -225,7 +276,7 @@ window.limpiarFirma = function(){
 }
 
 // ================================================================
-// Inicialización de firma y compresión de foto (internas)
+// Inicialización de firma y compresión de foto
 // ================================================================
 
 function initFirma(){
@@ -266,7 +317,7 @@ document.getElementById('fotoFile').addEventListener('change', e => {
   img.src = URL.createObjectURL(file);
 });
 
-// --- Re-chequeo de conexión automático ---
+// --- Auto-sync al recuperar conexión ---
 window.addEventListener('online',  () => { chequearConexion(); sincronizarPendientes(); });
 window.addEventListener('offline', chequearConexion);
 
@@ -310,7 +361,7 @@ window.addEventListener('offline', chequearConexion);
     <p style="font-size:12px;margin-top:10px">✍️ Firma de quien recibe:</p>
     <canvas id="firmaCanvas" width="460" height="180" style="border:1px solid #e2e8f0;border-radius:10px;touch-action:none;background:#fff;display:block;width:100%;max-width:100%;margin-top:4px"></canvas>
     <button type="button" onclick="limpiarFirma()" style="background:#e2e8f0;color:#0f172a;margin-top:6px">Borrar firma</button>
-    <button onclick="guardar()">Guardar Entrega</button>
+    <button id="btnGuardar" onclick="guardar()">Guardar Entrega</button>
     <button onclick="document.getElementById('formVis').style.display='none'" style="background:#e2e8f0;color:#0f172a">Cancelar</button>
   </div>
 </div>
