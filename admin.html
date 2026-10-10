@@ -54,7 +54,7 @@ let datosGlobal = [];
 let entregasPorId = {};
 let miEmpresaId = null;
 let autoRefreshTimer = null;
-let fechaSeleccionada = new Date();   // 👈 día que se está viendo
+let fechaSeleccionada = new Date();
 
 // ==================== HELPERS DE FECHA ====================
 function fechaParaInput(d){
@@ -124,7 +124,6 @@ window.entrarAdmin = async () => {
     document.getElementById('loginAdmin').style.display='none';
     document.getElementById('panel').style.display='block';
 
-    // Inicializar selector de fecha en HOY
     fechaSeleccionada = new Date();
     document.getElementById('fechaSelector').value = fechaParaInput(fechaSeleccionada);
     actualizarLabelFecha();
@@ -150,7 +149,6 @@ window.entrarAdmin = async () => {
 // ==================== SELECTOR DE FECHA ====================
 window.cambiarFecha = (valor) => {
   if(valor){
-    // input type="date" devuelve "YYYY-MM-DD" en UTC. Parsear como LOCAL.
     const [y, m, d] = valor.split('-').map(Number);
     fechaSeleccionada = new Date(y, m-1, d);
   } else {
@@ -264,7 +262,7 @@ async function cargarVendedores(){
 }
 
 window.eliminarVendedor = async (uid, email) => {
-  if(confirm(`¿Eliminar a ${email}?\n\nNota: esto borra solo el perfil en Firestore. El usuario en Authentication debe borrarse desde la consola de Firebase para poder reutilizar ese correo.`)){
+  if(confirm(`¿Eliminar a ${email}?\n\nNota: esto borra solo el perfil en Firestore. El usuario en Authentication debe borrarse desde la consola de Firebase.`)){
     await deleteDoc(doc(db, "usuarios", uid));
     cargarVendedores();
   }
@@ -280,17 +278,17 @@ window.cambiarTab = (tab) => {
   document.getElementById('tabHistorial').style.color = tab === 'hoy' ? '#0f172a' : 'white';
 }
 
-// ==================== TARJETA VISITA ====================
+// ==================== TARJETA VISITA (con botón 🗑️ Borrar) ====================
 function tarjetaVisita(d, docId){
   const estadoColor = d.estado === 'Entregado' ? '#16a34a' : (d.estado === 'Rechazado' ? '#dc2626' : '#ea580c');
   const foto  = d.foto  || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="70"><rect width="70" height="70" fill="%23e2e8f0"/></svg>';
   const firma = d.firma || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="40"><rect width="70" height="40" fill="%23f1f5f9"/></svg>';
-  return `<div class="visita"><img src="${foto}"><div style="flex:1"><b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span><br><small>👤 ${d.cliente||''}</small><br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><div style="margin-top:5px; display:flex; gap:10px"><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Mapa</a><button onclick="descargarPDF('${docId}')" style="font-size:11px; padding:2px 5px; cursor:pointer">📄 PDF</button></div></div><img class="firma-mini" src="${firma}"></div>`;
+  const guiaSegura = (d.guia || '').replace(/'/g, '').replace(/"/g, '');
+  return `<div class="visita"><img src="${foto}"><div style="flex:1"><b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span><br><small>👤 ${d.cliente||''}</small><br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><div style="margin-top:5px; display:flex; gap:10px; flex-wrap:wrap"><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Mapa</a><button onclick="descargarPDF('${docId}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#0f172a; color:white; border:none; border-radius:6px">📄 PDF</button><button onclick="eliminarEntrega('${docId}', '${guiaSegura}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#dc2626; color:white; border:none; border-radius:6px">🗑️ Borrar</button></div></div><img class="firma-mini" src="${firma}"></div>`;
 }
 
 // ==================== CARGAR (día seleccionado) ====================
 async function cargar(){
-  // Rango del día seleccionado (medianoche local → 23:59:59.999 local)
   const inicio = new Date(fechaSeleccionada);
   inicio.setHours(0, 0, 0, 0);
   const fin = new Date(fechaSeleccionada);
@@ -386,6 +384,28 @@ window.filtrarEntregas = () => {
     const idReal = Object.keys(entregasPorId).find(k => entregasPorId[k] === d);
     return tarjetaVisita(d, idReal);
   }).join('');
+}
+
+// ==================== ELIMINAR ENTREGA ====================
+window.eliminarEntrega = async (docId, guia) => {
+  const confirmar = confirm(
+    `⚠️ ¿Borrar la entrega "${guia || docId}"?\n\nEsta acción NO se puede deshacer.`
+  );
+  if(!confirmar) return;
+
+  try {
+    await deleteDoc(doc(db, "visitas", docId));
+    console.log('✅ Entrega eliminada: ' + docId);
+    await cargar();
+    await cargarHistorial(true);
+  } catch(e) {
+    console.error('Error al borrar', e);
+    if(e.code === 'permission-denied'){
+      alert('❌ No tienes permiso para borrar esta entrega.');
+    } else {
+      alert('Error al borrar: ' + e.message);
+    }
+  }
 }
 
 // ==================== PDF ====================
@@ -489,7 +509,6 @@ async function cargarHistorial(reset){
     <div class="stat"><b id="totalSinFirma" style="color:#dc2626">0</b><small>Sin Firma</small></div>
   </div>
 
-  <!-- 📅 SELECTOR DE FECHA -->
   <div class="card">
     <div class="fecha-bar">
       <div class="fecha-input">
