@@ -32,6 +32,8 @@ body{background:#f1f5f9;padding:12px}
 .fecha-bar button{margin-top:0;width:auto;padding:12px 18px}
 .badge-hoy{display:inline-block;background:#16a34a;color:white;font-size:11px;padding:2px 8px;border-radius:20px;margin-left:6px;vertical-align:middle}
 .badge-otro{display:inline-block;background:#f59e0b;color:white;font-size:11px;padding:2px 8px;border-radius:20px;margin-left:6px;vertical-align:middle}
+.check-global{display:flex;align-items:center;gap:8px;font-size:13px;color:#475569;margin-top:8px;cursor:pointer;background:#f8fafc;padding:10px;border-radius:10px;border:1px solid #e2e8f0}
+.check-global input{width:auto;margin:0;flex-shrink:0}
 #lastUpdate{font-size:11px;color:#94a3b8;margin-top:4px}
 .pulse{animation:pulse 0.6s ease-in-out}
 @keyframes pulse{0%{opacity:0.5}50%{opacity:1}100%{opacity:0.5}}
@@ -156,6 +158,7 @@ window.cambiarFecha = (valor) => {
   }
   actualizarLabelFecha();
   document.getElementById('searchGuia').value = '';
+  document.getElementById('buscarGlobal').checked = false;
   cargar().catch(e => console.error('Error al cambiar fecha', e));
 }
 
@@ -164,6 +167,7 @@ window.irAHoy = () => {
   document.getElementById('fechaSelector').value = fechaParaInput(fechaSeleccionada);
   actualizarLabelFecha();
   document.getElementById('searchGuia').value = '';
+  document.getElementById('buscarGlobal').checked = false;
   cargar().catch(e => console.error('Error al volver a hoy', e));
 }
 
@@ -172,14 +176,21 @@ function iniciarAutoRefresh(){
   if(autoRefreshTimer) clearInterval(autoRefreshTimer);
   autoRefreshTimer = setInterval(() => {
     if(document.visibilityState === 'visible' && miEmpresaId){
-      cargar().catch(e => console.warn('Auto-refresh falló', e));
+      // Solo refresca si no hay búsqueda activa (para no borrar los resultados)
+      const searchVal = (document.getElementById('searchGuia')?.value || '').trim();
+      if(!searchVal){
+        cargar().catch(e => console.warn('Auto-refresh falló', e));
+      }
     }
   }, 30000);
 }
 
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible' && miEmpresaId){
-    cargar().catch(e => console.warn('Refresh por visibilidad falló', e));
+    const searchVal = (document.getElementById('searchGuia')?.value || '').trim();
+    if(!searchVal){
+      cargar().catch(e => console.warn('Refresh por visibilidad falló', e));
+    }
   }
 });
 
@@ -188,6 +199,8 @@ window.recargarTodo = async () => {
   const btn = document.getElementById('btnActualizar');
   if(btn) btn.classList.add('pulse');
   try {
+    document.getElementById('searchGuia').value = '';
+    document.getElementById('buscarGlobal').checked = false;
     await cargar();
     await cargarVendedores();
     await cargarHistorial(true);
@@ -278,7 +291,7 @@ window.cambiarTab = (tab) => {
   document.getElementById('tabHistorial').style.color = tab === 'hoy' ? '#0f172a' : 'white';
 }
 
-// ==================== TARJETA VISITA (con botón 🗑️ Borrar) ====================
+// ==================== TARJETA VISITA ====================
 function tarjetaVisita(d, docId){
   const estadoColor = d.estado === 'Entregado' ? '#16a34a' : (d.estado === 'Rechazado' ? '#dc2626' : '#ea580c');
   const foto  = d.foto  || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="70"><rect width="70" height="70" fill="%23e2e8f0"/></svg>';
@@ -350,10 +363,12 @@ async function cargar(){
   actualizarUltimaSync();
 }
 
-// ==================== BÚSQUEDA ====================
-window.filtrarEntregas = () => {
+// ==================== BÚSQUEDA (local + global) ====================
+window.filtrarEntregas = async () => {
   const texto = (document.getElementById('searchGuia').value || '').toLowerCase().trim();
+  const buscarGlobal = document.getElementById('buscarGlobal')?.checked;
 
+  // Si está vacío, mostrar el día normal
   if(!texto){
     const html = datosGlobal.map(d => {
       const idReal = Object.keys(entregasPorId).find(k => entregasPorId[k] === d);
@@ -366,6 +381,67 @@ window.filtrarEntregas = () => {
     return;
   }
 
+  // ============ BÚSQUEDA GLOBAL (todo el historial) ============
+  if(buscarGlobal){
+    document.getElementById('lista').innerHTML =
+      '<p style="text-align:center;color:#64748b;padding:20px">🔎 Buscando en todo el historial...</p>';
+
+    try {
+      let snap;
+      try {
+        snap = await getDocsFromServer(query(
+          collection(db,"visitas"),
+          where("empresa_id","==",miEmpresaId),
+          orderBy("creado","desc"),
+          limit(500)
+        ));
+      } catch(e){
+        console.warn('Sin conexión, usando caché para búsqueda global', e);
+        snap = await getDocs(query(
+          collection(db,"visitas"),
+          where("empresa_id","==",miEmpresaId),
+          orderBy("creado","desc"),
+          limit(500)
+        ));
+      }
+
+      const todos = [];
+      snap.forEach(docSnap => {
+        const d = docSnap.data();
+        entregasPorId[docSnap.id] = d;
+        todos.push({ id: docSnap.id, data: d });
+      });
+
+      const filtrados = todos.filter(({data: d}) => {
+        const guia    = (d.guia     || '').toLowerCase();
+        const cliente = (d.cliente  || '').toLowerCase();
+        const vend    = (d.vendedor || '').toLowerCase();
+        const estado  = (d.estado   || '').toLowerCase();
+        return guia.includes(texto) || cliente.includes(texto) || vend.includes(texto) || estado.includes(texto);
+      });
+
+      if(filtrados.length === 0){
+        document.getElementById('lista').innerHTML =
+          `<p style="text-align:center;color:#64748b;padding:20px">🔍 Sin resultados para "${texto}" en ninguna fecha</p>`;
+        return;
+      }
+
+      const encabezado = `<p style="background:#eff6ff;color:#1e40af;padding:10px;border-radius:10px;font-size:13px;margin:0 4px 10px">
+        📚 <b>${filtrados.length}</b> resultado(s) encontrado(s) en el historial (últimas 500 entregas)
+      </p>`;
+
+      document.getElementById('lista').innerHTML = encabezado +
+        filtrados.map(({id, data}) => tarjetaVisita(data, id)).join('');
+
+    } catch(e) {
+      console.error('Error buscando globalmente', e);
+      document.getElementById('lista').innerHTML =
+        `<p style="text-align:center;color:#dc2626;padding:20px">❌ Error al buscar: ${e.message}</p>`;
+    }
+    return;
+  }
+
+  // ============ BÚSQUEDA LOCAL (solo el día seleccionado) ============
   const filtrados = datosGlobal.filter(d => {
     const guia    = (d.guia     || '').toLowerCase();
     const cliente = (d.cliente  || '').toLowerCase();
@@ -376,7 +452,7 @@ window.filtrarEntregas = () => {
 
   if(filtrados.length === 0){
     document.getElementById('lista').innerHTML =
-      `<p style="text-align:center;color:#64748b;padding:20px">🔍 Sin resultados para "${texto}"</p>`;
+      `<p style="text-align:center;color:#64748b;padding:20px">🔍 Sin resultados para "${texto}" en el día seleccionado.<br><small style="color:#94a3b8">Prueba activar ☑️ "Buscar en todo el historial"</small></p>`;
     return;
   }
 
@@ -522,7 +598,10 @@ async function cargarHistorial(reset){
   <div class="card">
     <h4>🔍 Buscar Entrega <small id="labelFecha" style="font-weight:normal;color:#64748b;font-size:13px"></small></h4>
     <input id="searchGuia" class="search-box" placeholder="Guía, cliente, mensajero o estado..." oninput="filtrarEntregas()">
-    <small style="color:#94a3b8;font-size:11px">Busca dentro del día seleccionado</small>
+    <label class="check-global">
+      <input type="checkbox" id="buscarGlobal" onchange="filtrarEntregas()">
+      <span>🔎 <b>Buscar en todo el historial</b> (no solo el día seleccionado, máx. 500)</span>
+    </label>
   </div>
 
   <div class="card">
