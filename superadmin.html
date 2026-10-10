@@ -1,3 +1,132 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TrazaGO | Super Admin</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
+body{background:#f1f5f9;padding:12px}
+.top{background:#0f172a;color:white;padding:16px;border-radius:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.btn{padding:8px 14px;border-radius:10px;border:none;font-weight:700;cursor:pointer}
+.btn-blue{background:#2563eb;color:white}
+.btn-red{background:#dc2626;color:white}
+.btn-green{background:#16a34a;color:white}
+.btn-white{background:white;color:#0f172a}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:14px 0}
+.stat{background:white;padding:14px;border-radius:14px;text-align:center;box-shadow:0 2px 8px #0001}
+.stat b{font-size:24px;display:block}
+.card{background:white;padding:14px;border-radius:16px;margin:14px 0;box-shadow:0 2px 8px #0001}
+.card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin:6px 0}
+.card button{background:#0f172a;color:white;border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:4px;cursor:pointer}
+.login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px;box-shadow:0 4px 10px rgba(0,0,0,0.1)}
+.login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
+.login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px;cursor:pointer}
+.item-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #f1f5f9;font-size:14px;gap:8px;flex-wrap:wrap}
+.btn-group{display:flex;gap:5px;flex-wrap:wrap}
+.sep{border:none;border-top:1px solid #e2e8f0;margin:12px 0}
+.hint{font-size:13px;color:#64748b;margin:6px 0}
+</style>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, getDocs, getDocsFromServer, doc, setDoc, updateDoc, deleteDoc, Timestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+const secondaryApp  = initializeApp(firebaseConfig, "Secondary");
+const secondaryAuth = getAuth(secondaryApp);
+await setPersistence(secondaryAuth, inMemoryPersistence);
+
+// ==================== LOGIN ====================
+window.entrarSuper = async () => {
+  const email = document.getElementById('email').value.trim();
+  const pass = document.getElementById('pass').value.trim();
+  const err = document.getElementById('err');
+  err.innerText = '';
+  try {
+    const cred = await signInWithEmailAndPassword(auth, email, pass);
+    const userSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
+
+    if(!userSnap.exists()){
+      err.innerText = '⚠️ Tu usuario existe en Auth pero no tiene perfil en /usuarios.';
+      await signOut(auth); return;
+    }
+
+    const rol = ((userSnap.data().rol || '') + '').toLowerCase().trim();
+    if(rol !== "superadmin"){
+      err.innerText = `⚠️ Tu rol es "${rol || '(vacío)'}". Se requiere "superadmin".`;
+      await signOut(auth); return;
+    }
+
+    document.getElementById('login').style.display='none';
+    document.getElementById('panel').style.display='block';
+    cargarGlobal();
+  } catch(e) {
+    if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'){
+      err.innerText = 'Correo o contraseña incorrectos';
+    } else {
+      err.innerText = 'Error: ' + e.code;
+    }
+  }
+}
+
+// ==================== CARGA GLOBAL ====================
+async function cargarGlobal(){
+  try {
+    let empSnap, visSnap, usuSnap;
+    try {
+      [empSnap, visSnap, usuSnap] = await Promise.all([
+        getDocsFromServer(collection(db, "empresas")),
+        getDocsFromServer(collection(db, "visitas")),
+        getDocsFromServer(collection(db, "usuarios"))
+      ]);
+    } catch(e){
+      console.warn('Cayendo a caché', e);
+      [empSnap, visSnap, usuSnap] = await Promise.all([
+        getDocs(collection(db, "empresas")),
+        getDocs(collection(db, "visitas")),
+        getDocs(collection(db, "usuarios"))
+      ]);
+    }
+
+    document.getElementById('totalEmp').innerText = empSnap.size;
+    document.getElementById('totalVis').innerText = visSnap.size;
+    document.getElementById('totalUsu').innerText = usuSnap.size;
+
+    let htmlEmp = '';
+    empSnap.forEach(d => {
+      const data = d.data();
+      htmlEmp += `<div class="item-row">
+        <span><b>${data.empresa_nombre || 'S/N'}</b> <small style="color:#64748b">(${d.id})</small> - ${data.activa ? '✅ Activa' : '❌ Inactiva'}</span>
+        <div class="btn-group">
+          <button class="btn ${data.activa ? 'btn-red' : 'btn-blue'}" onclick="toggleEmpresa('${d.id}', ${data.activa})">${data.activa ? 'Suspender' : 'Activar'}</button>
+          <button class="btn btn-red" onclick="eliminarEmpresa('${d.id}')">🗑️</button>
+        </div>
+      </div>`;
+    });
+    document.getElementById('listaEmp').innerHTML = htmlEmp || 'No hay empresas';
+  } catch(e) {
+    console.error(e);
+    document.getElementById('listaEmp').innerHTML = 'Error al cargar: ' + e.message;
+  }
+}
+
+// ==================== EMPRESAS ====================
+window.toggleEmpresa = async (id, estadoActual) => {
+  if(confirm(`¿Cambiar estado de la empresa?`)){
+    await updateDoc(doc(db, "empresas", id), { activa: !estadoActual });
+    cargarGlobal();
+  }
+}
+
+window.eliminarEmpresa = async (id) => {
+  if(confirm(`¿Eliminar la empresa permanentemente?\n(Los usuarios y entregas NO se borran)`)){
+    await deleteDoc(doc(db, "empresas", id));
+    cargarGlobal();
+  }
+}
+
+// ==================== CREAR EMPRESA + ADMIN (con diagnóstico paso a paso) ====================
 window.crearEmpresa = async () => {
   const nombre = document.getElementById('empNombre').value.trim();
   const idEmp  = document.getElementById('empId').value.trim();
@@ -18,7 +147,6 @@ window.crearEmpresa = async () => {
   let paso = '';
 
   try {
-    // ----- PASO 1: Crear empresa -----
     paso = '1/3 · Crear empresa';
     console.log('▶️ ' + paso);
     const empRef = doc(db, "empresas", idEmp);
@@ -34,13 +162,11 @@ window.crearEmpresa = async () => {
     });
     console.log('✅ Empresa creada');
 
-    // ----- PASO 2: Crear usuario en Auth -----
     paso = '2/3 · Crear usuario en Authentication';
     console.log('▶️ ' + paso);
     const cred = await createUserWithEmailAndPassword(secondaryAuth, aEmail, aPass);
-    console.log('✅ Auth user creado con UID: ' + cred.user.uid);
+    console.log('✅ Auth user: ' + cred.user.uid);
 
-    // ----- PASO 3: Crear perfil en Firestore -----
     paso = '3/3 · Guardar perfil en /usuarios';
     console.log('▶️ ' + paso);
     await setDoc(doc(db, "usuarios", cred.user.uid), {
@@ -50,7 +176,7 @@ window.crearEmpresa = async () => {
       empresa_nombre: nombre,
       creado: Timestamp.now()
     });
-    console.log('✅ Perfil guardado en Firestore');
+    console.log('✅ Perfil guardado');
 
     await signOut(secondaryAuth);
 
@@ -69,12 +195,70 @@ window.crearEmpresa = async () => {
             `Soluciones:\n` +
             `1) Ve a Firebase Console → Authentication → Users, borra ese correo y vuelve a intentar.\n` +
             `2) O crea manualmente su perfil en Firestore → /usuarios/{UID} con rol "admin".`);
-    } else if(e.code === 'permission-denied' || (e.message && e.message.includes('permission'))) {
+    } else if(e.code === 'permission-denied' || (e.message && e.message.includes('permission'))){
       alert(`❌ FALLÓ en ${paso} (permisos de Firestore)\n\n` +
             `Las reglas de Firestore bloquearon esta operación.\n` +
-            `Verifica que las reglas publicadas permitan al superadmin crear usuarios con rol "admin".`);
+            `Verifica que estén publicadas las reglas nuevas.`);
     } else {
       alert(`❌ FALLÓ en ${paso}\n\nCódigo: ${e.code || '(sin código)'}\nMensaje: ${e.message}`);
     }
   }
 }
+
+// ==================== BACKUP ====================
+window.descargarBackup = async () => {
+  const empSnap = await getDocs(collection(db, "empresas"));
+  const usuSnap = await getDocs(collection(db, "usuarios"));
+  const dataEmp = empSnap.docs.map(d => ({ID: d.id, ...d.data()}));
+  const dataUsu = usuSnap.docs.map(d => ({ID: d.id, ...d.data()}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataEmp), "Empresas");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataUsu), "Usuarios");
+  XLSX.writeFile(wb, `Backup_TrazaGO.xlsx`);
+}
+
+window.salir = () => { signOut(auth).then(() => location.reload()); }
+</script></head><body>
+
+<div id="login" class="login">
+  <h2 style="text-align:center">TrazaGO</h2>
+  <p style="text-align:center; color:gray">Acceso Super Admin</p><br>
+  <input id="email" placeholder="Correo">
+  <input id="pass" type="password" placeholder="Contraseña">
+  <button onclick="entrarSuper()">Entrar al Sistema</button>
+  <p id="err" style="color:red; text-align:center"></p>
+</div>
+
+<div id="panel" style="display:none">
+  <div class="top">
+    <h3>🚀 Panel Global SuperAdmin</h3>
+    <div class="btn-group">
+      <button class="btn btn-green" onclick="descargarBackup()">💾 Backup Global</button>
+      <button class="btn btn-white" onclick="salir()">Cerrar Sesión</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="totalEmp">0</b><small>Empresas</small></div>
+    <div class="stat"><b id="totalVis">0</b><small>Entregas Totales</small></div>
+    <div class="stat"><b id="totalUsu">0</b><small>Usuarios Totales</small></div>
+  </div>
+
+  <div class="card">
+    <h4>🏢 Crear Nueva Empresa + Admin</h4>
+    <input id="empNombre" placeholder="Nombre de la Empresa (ej: Distribuidora Norte)">
+    <input id="empId" placeholder="ID único (ej: distribuidora-norte)">
+    <p class="hint">El ID solo puede tener letras minúsculas, números y guiones</p>
+    <hr class="sep">
+    <p class="hint" style="font-weight:bold;color:#0f172a">👤 Admin inicial de esta empresa:</p>
+    <input id="adminEmail" placeholder="Correo del admin">
+    <input id="adminPass" type="password" placeholder="Contraseña (mín. 6 caracteres)">
+    <button onclick="crearEmpresa()">Registrar Empresa + Admin</button>
+  </div>
+
+  <div class="card">
+    <h4>📋 Gestión de Empresas</h4>
+    <div id="listaEmp">Cargando...</div>
+  </div>
+</div>
+</body></html>
