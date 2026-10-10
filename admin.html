@@ -8,6 +8,7 @@ body{background:#f1f5f9;padding:12px}
 .btn{padding:8px 14px;border-radius:10px;border:none;font-weight:700;cursor:pointer}
 .btn-green{background:#16a34a;color:white}
 .btn-white{background:white;color:#0f172a}
+.btn-blue{background:#2563eb;color:white}
 .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0}
 .stat{background:white;padding:14px;border-radius:14px;text-align:center;box-shadow:0 2px 8px #0001}
 .stat b{font-size:22px;display:block}
@@ -24,10 +25,14 @@ body{background:#f1f5f9;padding:12px}
 .firma-mini{width:70px;height:40px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff}
 .rank{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:8px 4px}
 .vend-card{background:white;padding:12px;border-radius:12px;box-shadow:0 1px 4px #0001;font-size:13px}
+.estado-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;color:white;font-weight:bold}
+#lastUpdate{font-size:11px;color:#94a3b8;margin-top:4px}
+.pulse{animation:pulse 0.6s ease-in-out}
+@keyframes pulse{0%{opacity:0.5}50%{opacity:1}100%{opacity:0.5}}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, getDoc, setDoc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, getDocs, getDocsFromServer, query, where, orderBy, limit, doc, getDoc, setDoc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
@@ -35,14 +40,16 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-const secondaryApp = initializeApp(firebaseConfig, "Secondary");
+const secondaryApp  = initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = getAuth(secondaryApp);
 await setPersistence(secondaryAuth, inMemoryPersistence);
 
 let datosGlobal = [];
-let entregasPorId = {};   // 👈 mapa id -> datos para el PDF
+let entregasPorId = {};
 let miEmpresaId = null;
+let autoRefreshTimer = null;
 
+// ==================== LOGIN ====================
 window.entrarAdmin = async () => {
   const email = document.getElementById('adminEmail').value.trim();
   const pass = document.getElementById('adminPass').value.trim();
@@ -83,6 +90,7 @@ window.entrarAdmin = async () => {
       await cargarVendedores();
       await cargarHistorial(true);
       cambiarTab('hoy');
+      iniciarAutoRefresh();
     } catch(e) {
       console.error("Error cargando datos:", e);
     }
@@ -95,15 +103,45 @@ window.entrarAdmin = async () => {
   }
 }
 
-// 👇 Recarga completa (botón "Actualizar")
+// ==================== AUTO REFRESH ====================
+function iniciarAutoRefresh(){
+  if(autoRefreshTimer) clearInterval(autoRefreshTimer);
+  autoRefreshTimer = setInterval(() => {
+    if(document.visibilityState === 'visible' && miEmpresaId){
+      cargar().catch(e => console.warn('Auto-refresh falló', e));
+    }
+  }, 30000);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && miEmpresaId){
+    cargar().catch(e => console.warn('Refresh por visibilidad falló', e));
+  }
+});
+
+// ==================== RECARGA MANUAL ====================
 window.recargarTodo = async () => {
+  const btn = document.getElementById('btnActualizar');
+  if(btn) btn.classList.add('pulse');
   try {
     await cargar();
     await cargarVendedores();
     await cargarHistorial(true);
-  } catch(e){ console.error("Error recargando:", e); }
+    actualizarUltimaSync();
+  } catch(e){
+    console.error("Error recargando:", e);
+    alert('Error al actualizar: ' + e.message);
+  } finally {
+    setTimeout(() => btn && btn.classList.remove('pulse'), 600);
+  }
 }
 
+function actualizarUltimaSync(){
+  const el = document.getElementById('lastUpdate');
+  if(el) el.innerText = 'Última actualización: ' + new Date().toLocaleTimeString();
+}
+
+// ==================== INVITAR VENDEDOR ====================
 window.invitarVendedor = async () => {
   const email = document.getElementById('vendEmail').value.trim();
   const pass = document.getElementById('vendPass').value.trim();
@@ -125,7 +163,9 @@ window.invitarVendedor = async () => {
     cargarVendedores();
   } catch(e) {
     if(e.code === 'auth/email-already-in-use'){
-      alert('⚠️ Ese correo ya está registrado en el sistema (aunque no aparezca aquí). Usa otro o bórralo desde Firebase Authentication.');
+      alert('⚠️ Ese correo ya está registrado en Authentication (aunque no aparezca aquí). Usa otro o bórralo desde Firebase Console → Authentication → Users.');
+    } else if(e.code === 'auth/weak-password'){
+      alert('⚠️ Contraseña muy débil. Usa al menos 6 caracteres.');
     } else {
       alert('Error: ' + e.code);
     }
@@ -133,7 +173,22 @@ window.invitarVendedor = async () => {
 }
 
 async function cargarVendedores(){
-  const snap = await getDocs(query(collection(db,"usuarios"), where("empresa_id","==",miEmpresaId), where("rol","==","vendedor")));
+  let snap;
+  try {
+    snap = await getDocsFromServer(query(
+      collection(db,"usuarios"),
+      where("empresa_id","==",miEmpresaId),
+      where("rol","==","vendedor")
+    ));
+  } catch(e){
+    console.warn('Usando caché para vendedores', e);
+    snap = await getDocs(query(
+      collection(db,"usuarios"),
+      where("empresa_id","==",miEmpresaId),
+      where("rol","==","vendedor")
+    ));
+  }
+
   let html = '';
   snap.forEach(d => {
     const email = d.data().email || '(sin correo)';
@@ -143,12 +198,13 @@ async function cargarVendedores(){
 }
 
 window.eliminarVendedor = async (uid, email) => {
-  if(confirm(`¿Eliminar a ${email}?\n\nNota: esto solo borra el perfil en Firestore. El usuario en Authentication debe borrarse desde la consola de Firebase.`)){
+  if(confirm(`¿Eliminar a ${email}?\n\nNota: esto borra solo el perfil en Firestore. El usuario en Authentication debe borrarse desde la consola de Firebase para poder reutilizar ese correo.`)){
     await deleteDoc(doc(db, "usuarios", uid));
     cargarVendedores();
   }
 }
 
+// ==================== TABS ====================
 window.cambiarTab = (tab) => {
   document.getElementById('lista').style.display = tab === 'hoy' ? 'block' : 'none';
   document.getElementById('historial').style.display = tab === 'hoy' ? 'none' : 'block';
@@ -158,24 +214,40 @@ window.cambiarTab = (tab) => {
   document.getElementById('tabHistorial').style.color = tab === 'hoy' ? '#0f172a' : 'white';
 }
 
-// 👇 Ahora usa docId en lugar de index
+// ==================== TARJETA VISITA ====================
 function tarjetaVisita(d, docId){
   const estadoColor = d.estado === 'Entregado' ? '#16a34a' : (d.estado === 'Rechazado' ? '#dc2626' : '#ea580c');
-  const foto = d.foto || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="70"><rect width="70" height="70" fill="%23e2e8f0"/></svg>';
+  const foto  = d.foto  || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="70"><rect width="70" height="70" fill="%23e2e8f0"/></svg>';
   const firma = d.firma || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="40"><rect width="70" height="40" fill="%23f1f5f9"/></svg>';
   return `<div class="visita"><img src="${foto}"><div style="flex:1"><b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span><br><small>👤 ${d.cliente||''}</small><br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><div style="margin-top:5px; display:flex; gap:10px"><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Mapa</a><button onclick="descargarPDF('${docId}')" style="font-size:11px; padding:2px 5px; cursor:pointer">📄 PDF</button></div></div><img class="firma-mini" src="${firma}"></div>`;
 }
 
+// ==================== CARGAR (HOY) - Forzado servidor ====================
 async function cargar(){
  const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
- const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), where("creado",">=",Timestamp.fromDate(inicioHoy))));
+ let snap;
+ try {
+   snap = await getDocsFromServer(query(
+     collection(db,"visitas"),
+     where("empresa_id","==",miEmpresaId),
+     where("creado",">=",Timestamp.fromDate(inicioHoy))
+   ));
+ } catch(e){
+   console.warn('Sin conexión al servidor, usando caché', e);
+   snap = await getDocs(query(
+     collection(db,"visitas"),
+     where("empresa_id","==",miEmpresaId),
+     where("creado",">=",Timestamp.fromDate(inicioHoy))
+   ));
+ }
+
  let totalVis = 0, totalFirmadas = 0;
  let porVendedor = {};
  datosGlobal = [];
  entregasPorId = {};
  let htmlVisitas = '';
 
- snap.forEach((docSnap)=>{
+ snap.forEach((docSnap) => {
    const d = docSnap.data();
    datosGlobal.push(d);
    entregasPorId[docSnap.id] = d;
@@ -199,13 +271,13 @@ async function cargar(){
  });
  document.getElementById('ranking').innerHTML = htmlRank || 'No hay datos';
  document.getElementById('lista').innerHTML = htmlVisitas || 'No hay entregas hoy';
+ actualizarUltimaSync();
 }
 
-// 👇 Búsqueda segura y ampliada (guía, cliente, vendedor, estado)
+// ==================== BÚSQUEDA ====================
 window.filtrarEntregas = () => {
   const texto = (document.getElementById('searchGuia').value || '').toLowerCase().trim();
 
-  // Si está vacío, restaura la lista completa de hoy
   if(!texto){
     const html = datosGlobal.map(d => {
       const idReal = Object.keys(entregasPorId).find(k => entregasPorId[k] === d);
@@ -235,7 +307,7 @@ window.filtrarEntregas = () => {
   }).join('');
 }
 
-// 👇 PDF por id de documento (no por índice)
+// ==================== PDF ====================
 window.descargarPDF = async (docId) => {
   const { jsPDF } = window.jspdf;
   const docPdf = new jsPDF();
@@ -260,6 +332,7 @@ window.descargarPDF = async (docId) => {
   docPdf.save(`Entrega_${d.guia || docId}.pdf`);
 }
 
+// ==================== EXCEL ====================
 window.descargarExcel = () => {
   if(datosGlobal.length === 0){ alert('No hay datos'); return; }
   const datosExcel = datosGlobal.map(d => ({
@@ -277,13 +350,31 @@ window.descargarExcel = () => {
   XLSX.writeFile(wb, `TrazaGO_Entregas.xlsx`);
 }
 
+// ==================== HISTORIAL - Forzado servidor ====================
 async function cargarHistorial(reset){
-  if(reset) document.getElementById('historial').innerHTML = '';
-  const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), limit(50)));
+  if(reset) document.getElementById('historial').innerHTML = 'Cargando...';
+  let snap;
+  try {
+    snap = await getDocsFromServer(query(
+      collection(db,"visitas"),
+      where("empresa_id","==",miEmpresaId),
+      orderBy("creado","desc"),
+      limit(50)
+    ));
+  } catch(e){
+    console.warn('Sin conexión, usando caché para historial', e);
+    snap = await getDocs(query(
+      collection(db,"visitas"),
+      where("empresa_id","==",miEmpresaId),
+      orderBy("creado","desc"),
+      limit(50)
+    ));
+  }
+
   let html = '';
   snap.forEach((docSnap) => {
     const d = docSnap.data();
-    entregasPorId[docSnap.id] = d;   // 👈 registra también los del historial
+    entregasPorId[docSnap.id] = d;
     html += tarjetaVisita(d, docSnap.id);
   });
   document.getElementById('historial').innerHTML = html || 'No hay historial';
@@ -300,10 +391,13 @@ async function cargarHistorial(reset){
 
 <div id="panel" style="display:none">
   <div class="top">
-    <h3>TrazaGO - Control <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3>
+    <div>
+      <h3>TrazaGO - Control <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3>
+      <div id="lastUpdate" style="color:#94a3b8">—</div>
+    </div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-green" onclick="descargarExcel()">📊 Excel</button>
-      <button class="btn btn-white" onclick="recargarTodo()">↻ Actualizar</button>
+      <button id="btnActualizar" class="btn btn-white" onclick="recargarTodo()">↻ Actualizar</button>
     </div>
   </div>
 
@@ -315,7 +409,8 @@ async function cargarHistorial(reset){
 
   <div class="card">
     <h4>🔍 Buscar Entrega</h4>
-    <input id="searchGuia" class="search-box" placeholder="Escribe la guía, cliente, mensajero o estado..." oninput="filtrarEntregas()">
+    <input id="searchGuia" class="search-box" placeholder="Guía, cliente, mensajero o estado..." oninput="filtrarEntregas()">
+    <small style="color:#94a3b8;font-size:11px">Busca en las entregas de hoy</small>
   </div>
 
   <div class="card">
