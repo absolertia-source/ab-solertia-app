@@ -134,7 +134,6 @@ window.entrarAdmin = async () => {
     fechaSeleccionada = new Date();
     document.getElementById('fechaSelector').value = fechaParaInput(fechaSeleccionada);
 
-    // 🔄 Cargar todo SIN ordenar en Firestore (filtramos/ordenamos en JS)
     await cargarJornadas();
     await cargarJornadaActual();
     await cargarVendedores();
@@ -151,11 +150,10 @@ window.entrarAdmin = async () => {
   }
 }
 
-// ==================== JORNADAS (sin índices compuestos) ====================
+// ==================== JORNADAS ====================
 async function cargarJornadas(){
   jornadasLista = [];
   try {
-    // ✅ SOLO where(empresa_id) → no necesita índice compuesto
     let snap;
     try {
       snap = await getDocsFromServer(query(
@@ -170,12 +168,9 @@ async function cargarJornadas(){
         limit(50)
       ));
     }
-
     snap.forEach(d => {
       jornadasLista.push({ id: d.id, ...d.data() });
     });
-
-    // 🔄 Ordenar por inicio desc en JS
     jornadasLista.sort((a,b) => timestampAMillis(b.inicio) - timestampAMillis(a.inicio));
   } catch(e){
     console.error('❌ Error cargando jornadas:', e);
@@ -186,7 +181,6 @@ async function cargarJornadas(){
 async function cargarJornadaActual(){
   jornadaActual = null;
   try {
-    // ✅ SOLO where(empresa_id) → sin índice compuesto
     let snap;
     try {
       snap = await getDocsFromServer(query(
@@ -201,8 +195,6 @@ async function cargarJornadaActual(){
         limit(50)
       ));
     }
-
-    // 🔄 Filtrar en JS la que esté abierta
     snap.forEach(d => {
       const data = d.data();
       if(data.estado === 'abierta'){
@@ -213,7 +205,6 @@ async function cargarJornadaActual(){
     console.error('❌ Error cargando jornada actual:', e);
     jornadaActual = null;
   }
-
   renderizarJornadaActual();
 
   if(modoVista === 'jornada' && !jornadaSeleccionada && jornadaActual){
@@ -306,24 +297,32 @@ window.confirmarNuevaJornada = async () => {
   }
 }
 
+// ✅ CORREGIDO: sin where(jornada_id), filtra empresa y cuenta en JS
 window.cerrarJornada = async (id) => {
   if(!confirm('⚠️ ¿Cerrar la jornada actual?\n\nLos mensajeros ya no asociarán nuevas entregas a esta jornada.')) return;
 
   try {
-    // Contar entregas de esa jornada — solo where(jornada_id), sin índice compuesto
-    let snap;
+    // SOLO where(empresa_id) → evita error de permisos
+    let rawSnap;
     try {
-      snap = await getDocsFromServer(query(
+      rawSnap = await getDocsFromServer(query(
         collection(db,"visitas"),
-        where("jornada_id","==",id)
+        where("empresa_id","==",miEmpresaId),
+        limit(1000)
       ));
     } catch(e){
-      snap = await getDocs(query(
+      rawSnap = await getDocs(query(
         collection(db,"visitas"),
-        where("jornada_id","==",id)
+        where("empresa_id","==",miEmpresaId),
+        limit(1000)
       ));
     }
-    const total = snap.size;
+
+    // Contar en JS las que son de esta jornada
+    let total = 0;
+    rawSnap.forEach(d => {
+      if(d.data().jornada_id === id) total++;
+    });
 
     await updateDoc(doc(db, "jornadas", id), {
       estado: 'cerrada',
@@ -543,26 +542,26 @@ async function cargarLista(){
   let snap;
   try {
     if(modoVista === 'jornada' && jornadaSeleccionada){
-      // ✅ Solo where(jornada_id) → sin índice
+      // ✅ CORREGIDO: solo where(empresa_id), filtramos jornada en JS
       let rawSnap;
       try {
         rawSnap = await getDocsFromServer(query(
           collection(db,"visitas"),
-          where("jornada_id","==",jornadaSeleccionada)
+          where("empresa_id","==",miEmpresaId),
+          limit(1000)
         ));
       } catch(e1){
         rawSnap = await getDocs(query(
           collection(db,"visitas"),
-          where("jornada_id","==",jornadaSeleccionada)
+          where("empresa_id","==",miEmpresaId),
+          limit(1000)
         ));
       }
-      // Filtrar por empresa en JS (por seguridad)
       const arr = [];
       rawSnap.forEach(d => {
         const data = d.data();
-        if(data.empresa_id === miEmpresaId) arr.push({id: d.id, data});
+        if(data.jornada_id === jornadaSeleccionada) arr.push({id: d.id, data});
       });
-      // Ordenar por creado desc en JS
       arr.sort((a,b) => timestampAMillis(b.data.creado) - timestampAMillis(a.data.creado));
       snap = { forEach: cb => arr.forEach(x => cb({ id: x.id, data: () => x.data })) , size: arr.length };
 
@@ -585,19 +584,18 @@ async function cargarLista(){
         ));
       }
     } else if(modoVista === 'sinjornada'){
-      // ✅ Solo where(empresa_id) → sin índice
       let rawSnap;
       try {
         rawSnap = await getDocsFromServer(query(
           collection(db,"visitas"),
           where("empresa_id","==",miEmpresaId),
-          limit(500)
+          limit(1000)
         ));
       } catch(e){
         rawSnap = await getDocs(query(
           collection(db,"visitas"),
           where("empresa_id","==",miEmpresaId),
-          limit(500)
+          limit(1000)
         ));
       }
       const arr = [];
