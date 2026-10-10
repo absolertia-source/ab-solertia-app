@@ -17,11 +17,13 @@ body{background:#f1f5f9;padding:12px}
 .login{max-width:360px;margin:60px auto;background:white;padding:24px;border-radius:20px;box-shadow:0 4px 10px rgba(0,0,0,0.1)}
 .login input{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}
 .login button{width:100%;padding:14px;border-radius:12px;border:none;background:#0f172a;color:white;font-weight:bold;margin-top:6px;cursor:pointer}
-.vendedor-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
+.vendedor-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
 .search-box{width:100%;padding:12px;border-radius:10px;border:2px solid #0f172a;margin:10px 0;font-size:16px}
 .visita{background:white;padding:12px;border-radius:14px;margin:8px 0;display:flex;gap:10px;box-shadow:0 1px 4px #0001}
 .visita img{width:70px;height:70px;object-fit:cover;border-radius:10px}
 .firma-mini{width:70px;height:40px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff}
+.rank{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:8px 4px}
+.vend-card{background:white;padding:12px;border-radius:12px;box-shadow:0 1px 4px #0001;font-size:13px}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -37,7 +39,8 @@ const secondaryApp = initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = getAuth(secondaryApp);
 await setPersistence(secondaryAuth, inMemoryPersistence);
 
-let datosGlobal=[];
+let datosGlobal = [];
+let entregasPorId = {};   // 👈 mapa id -> datos para el PDF
 let miEmpresaId = null;
 
 window.entrarAdmin = async () => {
@@ -45,13 +48,11 @@ window.entrarAdmin = async () => {
   const pass = document.getElementById('adminPass').value.trim();
   const err = document.getElementById('adminErr');
   err.innerText = 'Verificando...';
-  
+
   try {
-    // PASO 1: AUTENTICACIÓN
     const cred = await signInWithEmailAndPassword(auth, email, pass);
     console.log("Paso 1: Auth OK");
-    
-    // PASO 2: BÚSQUEDA DE PERFIL
+
     const userSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
     if(!userSnap.exists()){
       err.innerText = '❌ ERROR: Usuario autenticado pero NO EXISTE en la tabla "usuarios"';
@@ -59,7 +60,6 @@ window.entrarAdmin = async () => {
     }
     console.log("Paso 2: Perfil encontrado");
 
-    // PASO 3: VALIDACIÓN DE ROL
     const userData = userSnap.data();
     const rol = userData.rol;
     if(rol !== "admin" && rol !== "superadmin"){
@@ -68,27 +68,25 @@ window.entrarAdmin = async () => {
     }
     console.log("Paso 3: Rol OK");
 
-    // PASO 4: EMPRESA
     miEmpresaId = userData.empresa_id;
     if(!miEmpresaId){
       err.innerText = '❌ ERROR: Usuario sin empresa_id asignada';
       await signOut(auth); return;
     }
-    
+
     document.getElementById('nombreEmpresaTop').innerText = userData.empresa_nombre || '';
     document.getElementById('loginAdmin').style.display='none';
     document.getElementById('panel').style.display='block';
-    
-    // Cargar datos
+
     try {
-        await cargar(); 
-        await cargarVendedores(); 
-        await cargarHistorial(true); 
-        cambiarTab('hoy');
+      await cargar();
+      await cargarVendedores();
+      await cargarHistorial(true);
+      cambiarTab('hoy');
     } catch(e) {
-        console.error("Error cargando datos:", e);
+      console.error("Error cargando datos:", e);
     }
-  } catch(e) { 
+  } catch(e) {
     if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
         err.innerText = '❌ ERROR: Correo o contraseña incorrectos';
     } else {
@@ -97,27 +95,58 @@ window.entrarAdmin = async () => {
   }
 }
 
+// 👇 Recarga completa (botón "Actualizar")
+window.recargarTodo = async () => {
+  try {
+    await cargar();
+    await cargarVendedores();
+    await cargarHistorial(true);
+  } catch(e){ console.error("Error recargando:", e); }
+}
+
 window.invitarVendedor = async () => {
   const email = document.getElementById('vendEmail').value.trim();
   const pass = document.getElementById('vendPass').value.trim();
   if(!email || !pass){ alert('Datos incompletos'); return; }
+  if(pass.length < 6){ alert('La contraseña debe tener al menos 6 caracteres'); return; }
   try {
     const cred = await createUserWithEmailAndPassword(secondaryAuth, email, pass);
-    await setDoc(doc(db, "usuarios", cred.user.uid), { email, empresa_id: miEmpresaId, rol: "vendedor" });
+    await setDoc(doc(db, "usuarios", cred.user.uid), {
+      email,
+      empresa_id: miEmpresaId,
+      empresa_nombre: document.getElementById('nombreEmpresaTop').innerText || '',
+      rol: "vendedor",
+      creado: Timestamp.now()
+    });
     await signOut(secondaryAuth);
-    alert('✅ Mensajero creado'); cargarVendedores();
-  } catch(e) { alert('Error: ' + e.code); }
+    alert('✅ Mensajero creado');
+    document.getElementById('vendEmail').value = '';
+    document.getElementById('vendPass').value = '';
+    cargarVendedores();
+  } catch(e) {
+    if(e.code === 'auth/email-already-in-use'){
+      alert('⚠️ Ese correo ya está registrado en el sistema (aunque no aparezca aquí). Usa otro o bórralo desde Firebase Authentication.');
+    } else {
+      alert('Error: ' + e.code);
+    }
+  }
 }
 
 async function cargarVendedores(){
   const snap = await getDocs(query(collection(db,"usuarios"), where("empresa_id","==",miEmpresaId), where("rol","==","vendedor")));
   let html = '';
-  snap.forEach(d=>{ html += `<div class="vendedor-item"><span>👤 ${d.data().email}</span><button style="width:auto;padding:4px 10px;background:#dc2626;color:white;border:none;border-radius:8px;font-size:12px;cursor:pointer" onclick="eliminarVendedor('${d.id}','${d.data().email}')">🗑️</button></div>`; });
+  snap.forEach(d => {
+    const email = d.data().email || '(sin correo)';
+    html += `<div class="vendedor-item"><span>👤 ${email}</span><button style="width:auto;padding:4px 10px;background:#dc2626;color:white;border:none;border-radius:8px;font-size:12px;cursor:pointer" onclick="eliminarVendedor('${d.id}','${email}')">🗑️</button></div>`;
+  });
   document.getElementById('listaVendedores').innerHTML = html || 'No hay mensajeros';
 }
 
 window.eliminarVendedor = async (uid, email) => {
-  if(confirm(`¿Eliminar a ${email}?`)){ await deleteDoc(doc(db, "usuarios", uid)); cargarVendedores(); }
+  if(confirm(`¿Eliminar a ${email}?\n\nNota: esto solo borra el perfil en Firestore. El usuario en Authentication debe borrarse desde la consola de Firebase.`)){
+    await deleteDoc(doc(db, "usuarios", uid));
+    cargarVendedores();
+  }
 }
 
 window.cambiarTab = (tab) => {
@@ -129,68 +158,183 @@ window.cambiarTab = (tab) => {
   document.getElementById('tabHistorial').style.color = tab === 'hoy' ? '#0f172a' : 'white';
 }
 
-function tarjetaVisita(d, index){
+// 👇 Ahora usa docId en lugar de index
+function tarjetaVisita(d, docId){
   const estadoColor = d.estado === 'Entregado' ? '#16a34a' : (d.estado === 'Rechazado' ? '#dc2626' : '#ea580c');
-  return `<div class="visita"><img src="${d.foto||''}"><div style="flex:1"><b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span><br><small>👤 ${d.cliente||''}</small><br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><div style="margin-top:5px; display:flex; gap:10px"><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Mapa</a><button onclick="descargarPDF(${index})" style="font-size:11px; padding:2px 5px; cursor:pointer">📄 PDF</button></div></div><img class="firma-mini" src="${d.firma||''}"></div>`;
+  const foto = d.foto || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="70"><rect width="70" height="70" fill="%23e2e8f0"/></svg>';
+  const firma = d.firma || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="40"><rect width="70" height="40" fill="%23f1f5f9"/></svg>';
+  return `<div class="visita"><img src="${foto}"><div style="flex:1"><b style="font-size:16px">📦 ${d.guia||'S/G'}</b> - <span style="color:${estadoColor}; font-weight:bold">${d.estado||'S/E'}</span><br><small>👤 ${d.cliente||''}</small><br><span style="background:#0f172a;color:white;padding:2px 8px;border-radius:20px;font-size:11px">${d.vendedor||''}</span><br><small>${d.hora||''}</small><br><div style="margin-top:5px; display:flex; gap:10px"><a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" style="font-size:12px">📍 Mapa</a><button onclick="descargarPDF('${docId}')" style="font-size:11px; padding:2px 5px; cursor:pointer">📄 PDF</button></div></div><img class="firma-mini" src="${firma}"></div>`;
 }
 
 async function cargar(){
  const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
  const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), where("creado",">=",Timestamp.fromDate(inicioHoy))));
- let totalVis=0, totalFirmadas=0; let porVendedor = {}; datosGlobal=[]; let htmlVisitas='';
- snap.forEach((doc, index)=>{
-   const d=doc.data(); datosGlobal.push(d); totalVis++; if(d.firma) totalFirmadas++;
-   const vend=(d.vendedor||'sin-vendedor').toLowerCase();
-   if(!porVendedor[vend]) porVendedor[vend]={visitas:0,firmadas:0};
-   porVendedor[vend].visitas++; if(d.firma) porVendedor[vend].firmadas++;
-   htmlVisitas+=tarjetaVisita(d, index);
+ let totalVis = 0, totalFirmadas = 0;
+ let porVendedor = {};
+ datosGlobal = [];
+ entregasPorId = {};
+ let htmlVisitas = '';
+
+ snap.forEach((docSnap)=>{
+   const d = docSnap.data();
+   datosGlobal.push(d);
+   entregasPorId[docSnap.id] = d;
+   totalVis++;
+   if(d.firma) totalFirmadas++;
+   const vend = (d.vendedor || 'sin-vendedor').toLowerCase();
+   if(!porVendedor[vend]) porVendedor[vend] = {visitas:0, firmadas:0};
+   porVendedor[vend].visitas++;
+   if(d.firma) porVendedor[vend].firmadas++;
+   htmlVisitas += tarjetaVisita(d, docSnap.id);
  });
- document.getElementById('totalVis').innerText=totalVis;
- document.getElementById('totalFirmadas').innerText=totalFirmadas;
- document.getElementById('totalSinFirma').innerText=totalVis-totalFirmadas;
- let htmlRank='';
- Object.keys(porVendedor).sort().forEach(v=>{
-   const r=porVendedor[v];
-   htmlRank+= `<div class="vend-card"><b>👤 ${v}</b><br><small>${r.visitas} entregas</small></div>`;
+
+ document.getElementById('totalVis').innerText = totalVis;
+ document.getElementById('totalFirmadas').innerText = totalFirmadas;
+ document.getElementById('totalSinFirma').innerText = totalVis - totalFirmadas;
+
+ let htmlRank = '';
+ Object.keys(porVendedor).sort().forEach(v => {
+   const r = porVendedor[v];
+   htmlRank += `<div class="vend-card"><b>👤 ${v}</b><br><small>${r.visitas} entregas</small></div>`;
  });
- document.getElementById('ranking').innerHTML=htmlRank || 'No hay datos';
- document.getElementById('lista').innerHTML=htmlVisitas || 'No hay entregas hoy';
+ document.getElementById('ranking').innerHTML = htmlRank || 'No hay datos';
+ document.getElementById('lista').innerHTML = htmlVisitas || 'No hay entregas hoy';
 }
 
+// 👇 Búsqueda segura y ampliada (guía, cliente, vendedor, estado)
 window.filtrarEntregas = () => {
-  const texto = document.getElementById('searchGuia').value.toLowerCase();
-  const filtrados = datosGlobal.filter(d => d.guia.toLowerCase().includes(texto) || d.cliente.toLowerCase().includes(texto));
-  document.getElementById('lista').innerHTML = filtrados.map((d, i) => tarjetaVisita(d, i)).join('');
+  const texto = (document.getElementById('searchGuia').value || '').toLowerCase().trim();
+
+  // Si está vacío, restaura la lista completa de hoy
+  if(!texto){
+    const html = datosGlobal.map(d => {
+      const idReal = Object.keys(entregasPorId).find(k => entregasPorId[k] === d);
+      return tarjetaVisita(d, idReal);
+    }).join('');
+    document.getElementById('lista').innerHTML = html || 'No hay entregas hoy';
+    return;
+  }
+
+  const filtrados = datosGlobal.filter(d => {
+    const guia    = (d.guia     || '').toLowerCase();
+    const cliente = (d.cliente  || '').toLowerCase();
+    const vend    = (d.vendedor || '').toLowerCase();
+    const estado  = (d.estado   || '').toLowerCase();
+    return guia.includes(texto) || cliente.includes(texto) || vend.includes(texto) || estado.includes(texto);
+  });
+
+  if(filtrados.length === 0){
+    document.getElementById('lista').innerHTML =
+      `<p style="text-align:center;color:#64748b;padding:20px">🔍 Sin resultados para "${texto}"</p>`;
+    return;
+  }
+
+  document.getElementById('lista').innerHTML = filtrados.map(d => {
+    const idReal = Object.keys(entregasPorId).find(k => entregasPorId[k] === d);
+    return tarjetaVisita(d, idReal);
+  }).join('');
 }
 
-window.descargarPDF = async (index) => {
+// 👇 PDF por id de documento (no por índice)
+window.descargarPDF = async (docId) => {
   const { jsPDF } = window.jspdf;
   const docPdf = new jsPDF();
-  const d = datosGlobal[index];
+  const d = entregasPorId[docId];
+  if(!d){ alert('No se encontró la entrega'); return; }
+
   docPdf.setFontSize(20); docPdf.text("Certificado de Entrega - TrazaGO", 20, 20);
-  docPdf.setFontSize(12); docPdf.text(`Guía/Pedido: ${d.guia}`, 20, 35);
-  docPdf.text(`Receptor: ${d.cliente}`, 20, 42); docPdf.text(`Estado: ${d.estado}`, 20, 49);
-  docPdf.text(`Mensajero: ${d.vendedor}`, 20, 56); docPdf.text(`Fecha y Hora: ${d.hora}`, 20, 63);
-  docPdf.text(`Ubicación: ${d.lat}, ${d.lng}`, 20, 70);
-  if(d.foto) docPdf.addImage(d.foto, 'JPEG', 20, 80, 60, 60);
-  if(d.firma) docPdf.addImage(d.firma, 'PNG', 100, 80, 60, 30);
+  docPdf.setFontSize(12);
+  docPdf.text(`Guía/Pedido: ${d.guia || ''}`, 20, 35);
+  docPdf.text(`Receptor: ${d.cliente || ''}`, 20, 42);
+  docPdf.text(`Estado: ${d.estado || ''}`, 20, 49);
+  docPdf.text(`Mensajero: ${d.vendedor || ''}`, 20, 56);
+  docPdf.text(`Fecha y Hora: ${d.hora || ''}`, 20, 63);
+  docPdf.text(`Ubicación: ${d.lat || ''}, ${d.lng || ''}`, 20, 70);
+
+  try {
+    if(d.foto)  docPdf.addImage(d.foto,  'JPEG', 20, 80, 60, 60);
+    if(d.firma) docPdf.addImage(d.firma, 'PNG', 100, 80, 60, 30);
+  } catch(e){ console.warn('No se pudo añadir imagen al PDF', e); }
+
   docPdf.text("Este documento sirve como prueba legal de entrega.", 20, 160);
-  docPdf.save(`Entrega_${d.guia}.pdf`);
+  docPdf.save(`Entrega_${d.guia || docId}.pdf`);
 }
 
-window.descargarExcel=()=>{
-  if(datosGlobal.length==0){alert('No hay datos');return;}
-  const datosExcel = datosGlobal.map(d=>({ Mensajero: d.vendedor, Guia: d.guia, Estado: d.estado, Receptor: d.cliente, Firmado: d.firma?'Sí':'No', Fecha: d.hora, Mapa: `https://www.google.com/maps?q=${d.lat},${d.lng}` }));
-  const ws = XLSX.utils.json_to_sheet(datosExcel); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Entregas");
+window.descargarExcel = () => {
+  if(datosGlobal.length === 0){ alert('No hay datos'); return; }
+  const datosExcel = datosGlobal.map(d => ({
+    Mensajero: d.vendedor || '',
+    Guia: d.guia || '',
+    Estado: d.estado || '',
+    Receptor: d.cliente || '',
+    Firmado: d.firma ? 'Sí' : 'No',
+    Fecha: d.hora || '',
+    Mapa: `https://www.google.com/maps?q=${d.lat || ''},${d.lng || ''}`
+  }));
+  const ws = XLSX.utils.json_to_sheet(datosExcel);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Entregas");
   XLSX.writeFile(wb, `TrazaGO_Entregas.xlsx`);
 }
 
 async function cargarHistorial(reset){
-  if(reset) document.getElementById('historial').innerHTML='';
+  if(reset) document.getElementById('historial').innerHTML = '';
   const snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), limit(50)));
-  let html = ''; snap.forEach((doc, i) => { html += tarjetaVisita(doc.data(), i); });
+  let html = '';
+  snap.forEach((docSnap) => {
+    const d = docSnap.data();
+    entregasPorId[docSnap.id] = d;   // 👈 registra también los del historial
+    html += tarjetaVisita(d, docSnap.id);
+  });
   document.getElementById('historial').innerHTML = html || 'No hay historial';
 }
 </script></head><body>
-<div id="loginAdmin" class="login"><h2 style="text-align:center">TrazaGO</h2><p style="text-align:center; color:gray">Acceso Jefe de Empresa</p><br><input id="adminEmail" placeholder="Correo"><input id="adminPass" type="password" placeholder="Contraseña"><button onclick="entrarAdmin()">Entrar al Panel</button><p id="adminErr" style="color:red; text-align:center"></p></div>
-<div id="panel" style="display:none"><div class="top"><h3>TrazaGO - Control <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3><div style="display:flex;gap:8px"><button class="btn btn-green" onclick="descargarExcel()">📊 Excel</button><button class="btn btn-white" onclick="cargar()">↻ Actualizar</button></div></div><div class="stats"><div class="stat"><b id="totalVis">0</b><small>Totales</small></div><div class="stat"><b id="totalFirmadas" style="color:#16a34a">0</b><small>Con Firma</small></div><div class="stat"><b id="totalSinFirma" style="color:#dc2626">0</b><small>Sin Firma</small></div></div><div class="card"><h4>🔍 Buscar Entrega</h4><input id="searchGuia" class="search-box" placeholder="Escribe la guía o cliente..." oninput="filtrarEntregas()"></div><div class="card"><h4>➕ Invitar Mensajero</h4><input id="vendEmail" placeholder="Correo"><input id="vendPass" type="password" placeholder="Clave"><button onclick="invitarVendedor()">Crear acceso</button><div id="listaVendedores" style="margin-top:10px"></div></div><h4 style="margin:10px 4px">🏆 Productividad</h4><div id="ranking" class="rank"></div><div style="display:flex;gap:8px;margin:18px 4px 8px"><button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Hoy</button><button id="tabHistorial" class="btn btn-white" style="flex:1" onclick="cambiarTab('historial')"></button></div><div id="lista"></div><div id="historial" style="display:none"></div></div></body></html>
+<div id="loginAdmin" class="login">
+  <h2 style="text-align:center">TrazaGO</h2>
+  <p style="text-align:center; color:gray">Acceso Jefe de Empresa</p><br>
+  <input id="adminEmail" placeholder="Correo">
+  <input id="adminPass" type="password" placeholder="Contraseña">
+  <button onclick="entrarAdmin()">Entrar al Panel</button>
+  <p id="adminErr" style="color:red; text-align:center"></p>
+</div>
+
+<div id="panel" style="display:none">
+  <div class="top">
+    <h3>TrazaGO - Control <small id="nombreEmpresaTop" style="font-weight:normal"></small></h3>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-green" onclick="descargarExcel()">📊 Excel</button>
+      <button class="btn btn-white" onclick="recargarTodo()">↻ Actualizar</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="totalVis">0</b><small>Totales</small></div>
+    <div class="stat"><b id="totalFirmadas" style="color:#16a34a">0</b><small>Con Firma</small></div>
+    <div class="stat"><b id="totalSinFirma" style="color:#dc2626">0</b><small>Sin Firma</small></div>
+  </div>
+
+  <div class="card">
+    <h4>🔍 Buscar Entrega</h4>
+    <input id="searchGuia" class="search-box" placeholder="Escribe la guía, cliente, mensajero o estado..." oninput="filtrarEntregas()">
+  </div>
+
+  <div class="card">
+    <h4>➕ Invitar Mensajero</h4>
+    <input id="vendEmail" placeholder="Correo">
+    <input id="vendPass" type="password" placeholder="Clave (mín. 6 caracteres)">
+    <button onclick="invitarVendedor()">Crear acceso</button>
+    <div id="listaVendedores" style="margin-top:10px"></div>
+  </div>
+
+  <h4 style="margin:10px 4px">🏆 Productividad</h4>
+  <div id="ranking" class="rank"></div>
+
+  <div style="display:flex;gap:8px;margin:18px 4px 8px">
+    <button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Hoy</button>
+    <button id="tabHistorial" class="btn btn-white" style="flex:1" onclick="cambiarTab('historial')">📚 Historial</button>
+  </div>
+
+  <div id="lista"></div>
+  <div id="historial" style="display:none"></div>
+</div>
+</body></html>
