@@ -23,7 +23,7 @@ body{background:#f1f5f9;padding:12px}
 .vendedor-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
 .search-box{width:100%;padding:12px;border-radius:10px;border:2px solid #0f172a;margin:10px 0;font-size:16px}
 .visita{background:white;padding:12px;border-radius:14px;margin:8px 0;display:flex;gap:10px;box-shadow:0 1px 4px #0001}
-.visita.bloqueada{background:#fafafa;border-left:3px solid #94a3b8}
+.visita.bloqueada{background:#f8fafc;border-left:4px solid #94a3b8}
 .visita img{width:70px;height:70px;object-fit:cover;border-radius:10px}
 .firma-mini{width:70px;height:40px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff}
 .rank{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:8px 4px}
@@ -41,8 +41,7 @@ body{background:#f1f5f9;padding:12px}
 .jornada-actual .btn{width:auto}
 .badge-abierta{display:inline-block;background:#16a34a;color:white;font-size:11px;padding:3px 9px;border-radius:20px;font-weight:bold;margin-left:6px}
 .badge-cerrada{display:inline-block;background:#94a3b8;color:white;font-size:11px;padding:3px 9px;border-radius:20px;font-weight:bold;margin-left:6px}
-.lock-badge{display:inline-block;background:#64748b;color:white;padding:3px 8px;border-radius:6px;font-size:10px;margin-left:6px;font-weight:bold}
-.aviso-cerrada{background:#f1f5f9;color:#475569;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:8px;border-left:3px solid #64748b}
+.aviso-cerrada{background:#f1f5f9;color:#475569;padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:10px;border-left:4px solid #64748b;line-height:1.4}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -65,7 +64,7 @@ let miEmail = null;
 let autoRefreshTimer = null;
 let jornadaActual = null;
 let jornadasLista = [];
-let jornadaEstados = {};   // 👈 { "j_123": "abierta" | "cerrada" }
+let jornadaEstados = {};
 let modoVista = 'jornada';
 let jornadaSeleccionada = null;
 let fechaSeleccionada = new Date();
@@ -103,7 +102,7 @@ function timestampAMillis(ts){
   if(ts.toDate) return ts.toDate().getTime();
   return new Date(ts).getTime();
 }
-// 🕒 HORA REAL: viene de Firestore (serverTimestamp), no del celular
+// 🕒 Hora real de Firestore (serverTimestamp, no la del celular)
 function formatearHoraReal(d){
   if(d.creado){
     try {
@@ -112,7 +111,7 @@ function formatearHoraReal(d){
         day:'2-digit', month:'2-digit', year:'numeric',
         hour:'2-digit', minute:'2-digit'
       });
-    } catch(e){ /* cae al fallback */ }
+    } catch(e){ /* fallback */ }
   }
   return d.hora || '(sin fecha)';
 }
@@ -321,7 +320,6 @@ window.cerrarJornada = async (id) => {
   if(!confirm('🔒 ¿Cerrar la jornada actual?\n\n⚠️ Una vez cerrada, sus entregas quedan BLOQUEADAS (no se podrán borrar ni editar).\n\nPodrás reabrirla después si necesitas hacer cambios.')) return;
 
   try {
-    // Contar entregas de esa jornada
     let rawSnap;
     try {
       rawSnap = await getDocsFromServer(query(
@@ -380,6 +378,11 @@ window.reabrirJornada = async (id) => {
   } catch(e){
     alert('Error: ' + e.message);
   }
+}
+
+window.reabrirJornadaSeleccionada = () => {
+  if(!jornadaSeleccionada){ alert('Selecciona una jornada primero'); return; }
+  reabrirJornada(jornadaSeleccionada);
 }
 
 window.verJornadaActual = () => {
@@ -543,17 +546,15 @@ window.cambiarTab = (tab) => {
   document.getElementById('tabHistorial').style.color = tab === 'hoy' ? '#0f172a' : 'white';
 }
 
-// ==================== TARJETA (con hora real + candado) ====================
+// ==================== TARJETA ====================
 function tarjetaVisita(d, docId){
   const estadoColor = d.estado === 'Entregado' ? '#16a34a' : (d.estado === 'Rechazado' ? '#dc2626' : '#ea580c');
   const foto  = d.foto  || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="70"><rect width="70" height="70" fill="%23e2e8f0"/></svg>';
   const firma = d.firma || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="40"><rect width="70" height="40" fill="%23f1f5f9"/></svg>';
   const guiaSegura = (d.guia || '').replace(/'/g, '').replace(/"/g, '');
 
-  // 🕒 Hora real (de Firestore)
   const horaReal = formatearHoraReal(d);
 
-  // 🔒 Verificar si la jornada está cerrada
   const estadoJornada = d.jornada_id ? jornadaEstados[d.jornada_id] : null;
   const cerrada = estadoJornada === 'cerrada';
 
@@ -659,6 +660,8 @@ async function cargarLista(){
       document.getElementById('totalVis').innerText = 0;
       document.getElementById('totalFirmadas').innerText = 0;
       document.getElementById('totalSinFirma').innerText = 0;
+      const contReabrir = document.getElementById('accionesJornadaCerrada');
+      if(contReabrir) contReabrir.style.display = 'none';
       return;
     }
   } catch(e){
@@ -705,11 +708,17 @@ async function cargarLista(){
   let avisoCerrada = '';
   if(esVistaCerrada){
     avisoCerrada = `<div class="aviso-cerrada">
-      🔒 <b>Jornada cerrada.</b> Las entregas de esta jornada están bloqueadas contra borrado. Para editarlas, primero reabre la jornada desde el dropdown.
+      🔒 <b>Jornada cerrada.</b> Las entregas de esta jornada están bloqueadas contra borrado. Para editarlas, primero reabre la jornada.
     </div>`;
   }
 
   document.getElementById('lista').innerHTML = avisoCerrada + (htmlVisitas || vacio);
+
+  const contReabrir = document.getElementById('accionesJornadaCerrada');
+  if(contReabrir){
+    contReabrir.style.display = esVistaCerrada ? 'block' : 'none';
+  }
+
   actualizarUltimaSync();
 }
 
@@ -759,6 +768,9 @@ window.filtrarEntregas = async () => {
         const jornada = (d.jornada_nombre || '').toLowerCase();
         return guia.includes(texto) || cliente.includes(texto) || vend.includes(texto) || estado.includes(texto) || jornada.includes(texto);
       });
+
+      const contReabrir = document.getElementById('accionesJornadaCerrada');
+      if(contReabrir) contReabrir.style.display = 'none';
 
       if(filtrados.length === 0){
         document.getElementById('lista').innerHTML =
@@ -981,6 +993,16 @@ async function cargarHistorial(reset){
 
   <div id="lista"></div>
   <div id="historial" style="display:none"></div>
+
+  <!-- 🔓 Botón reabrir (solo visible en jornadas cerradas) -->
+  <div id="accionesJornadaCerrada" style="display:none;margin:14px 0">
+    <button class="btn btn-blue" onclick="reabrirJornadaSeleccionada()" style="width:100%;padding:14px;font-size:15px">
+      🔓 Reabrir esta jornada para editar
+    </button>
+    <p style="text-align:center;font-size:12px;color:#94a3b8;margin-top:6px">
+      Al reabrir, podrás borrar y editar sus entregas
+    </p>
+  </div>
 </div>
 
 <!-- MODAL Nueva Jornada -->
