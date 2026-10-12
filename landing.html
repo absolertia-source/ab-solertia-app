@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TrazaGO | Entregas sin excusas</title>
+<meta name="description" content="Sistema de trazabilidad de entregas para restaurantes, últimas millas y distribuidoras. Prueba legal de cada entrega, sin cobros a tus mensajeros.">
+<meta name="theme-color" content="#0f172a">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif}
+html{scroll-behavior:smooth}
+body{background:#f8fafc;color:#334155;line-height:1.6}
+
+/* ============ NAVBAR ============ */
+.nav{background:#0f172a;color:white;padding:16px 24px;position:sticky;top:0;z-index:50;box-shadow:0 2px 12px rgba(0,0,0,0.1)}
+.nav-inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+.logo{font-size:22px;font-weight:900;letter-spacing:-0.5px}
+.logo span:first-child{color:white}
+.logo span:last-child{color:#d4af37}
+.nav-links{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+.nav-links a{color:#cbd5e1;text-decoration:none;font-size:14px;font-weight:600;transition:color 0.2s}
+.nav-links a:hover{color:#d4af37}
+.btn-nav{background:#d4af37;color:#0f172a;padding:10px 20px;border-radius:10px;border:none;font-weight:800;cursor:pointer;font-size:14px;text-decoration:none}
+
+/* ============ HERO ============ */
+.hero{background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:white;padding:80px 24px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;top:-100px;right:-100px;width:400px;height:400px;background:radial-gradient(circle,#d4af37 0%,transparent 70%);opacity:0.15}
+.hero-inner{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;position:relative;z-index:1}
+.hero-badge{display:inline-block;background:rgba(212,175,55,0.15);color:#d4af37;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:700;margin-bottom:20px;border:1px solid rgba(212,175,55,0.3)}
+.hero h1{font-size:52px;font-weight:900;line-height:1.1;margin-bottom:20px;letter-spacing:-1px}
+.hero h1 span{color:#d4af37}
+.hero p{font-size:18px;color:#cbd5e1;margin-bottom:30px;line-height:1.7}
+.hero-cta{display:flex;gap:12px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;border-radius:12px;border:none;font-weight:800;font-size:16px;cursor:pointer;text-decoration:none;transition:all 0.2s}
+.btn-primary{background:#16a34a;color:white;box-shadow:0 4px 14px rgba(22,163,74,0.3)}
+.btn-primary:hover{background:#15803d;transform:translateY(-2px)}
+.btn-gold{background:#d4af37;color:#0f172a;box-shadow:0 4px 14px rgba(212,175,55,0.3)}
+.btn-gold:hover{background:#b8941f;transform:translateY(-2px)}
+.btn-outline{background:transparent;color:white;border:2px solid rgba(255,255,255,0.2)}
+.btn-outline:hover{border-color:#d4af37;color:#d4af37}
+
+.hero-mockup{background:#1e293b;border-radius:20px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,0.5);border:1px solid #334155}
+.mockup-bar{display:flex;gap:6px;margin-bottom:16px}
+.mockup-dot{width:10px;height:10px;border-radius:50%}
+.mockup-dot.red{background:#ef4444}
+.mockup-dot.yellow{background:#eab308}
+.mockup-dot.green{background:#22c55e}
+.mockup-content{background:#0f172a;border-radius:12px;padding:20px;color:#cbd5e1;font-size:13px}
+.mockup-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1e293b}
+.mockup-row:last-child{border-bottom:none}
+.mockup-badge{background:#16a34a;color:white;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700}
+.mockup-badge.gold{background:#d4af37;color:#0f172a}
+
+/* ============ FEATURES ============ */
+.section{padding:80px 24px}
+.section-inner{max-width:1200px;margin:0 auto}
+.section-title{text-align:center;margin-bottom:60px}
+.section-title h2{font-size:40px;font-weight:900;color:#0f172a;margin-bottom:16px;letter-spacing:-1px}
+.section-title p{font-size:18px;color:#64748b;max-width:700px;margin:0 auto}
+.section-title .line{width:60px;height:4px;background:#d4af37;margin:20px auto;border-radius:2px}
+
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
+.feature{background:white;padding:32px;border-radius:20px;border:1px solid #e2e8f0;transition:all 0.3s}
+.feature:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(15,23,42,0.08);border-color:#d4af37}
+.feature-icon{width:56px;height:56px;background:linear-gradient(135deg,#0f172a 0%,#334155 100%);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:20px}
+.feature h3{font-size:18px;font-weight:800;color:#0f172a;margin-bottom:10px}
+.feature p{font-size:15px;color:#64748b;line-height:1.6}
+
+/* ============ CÓMO FUNCIONA ============ */
+.how{background:#0f172a;color:white}
+.how .section-title h2{color:white}
+.how .section-title p{color:#94a3b8}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:24px;margin-top:20px}
+.step{background:rgba(255,255,255,0.05);padding:28px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);position:relative}
+.step-num{width:44px;height:44px;background:#d4af37;color:#0f172a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;margin-bottom:16px}
+.step h4{font-size:17px;font-weight:800;margin-bottom:8px}
+.step p{font-size:14px;color:#94a3b8}
+
+/* ============ PRECIOS ============ */
+.pricing{background:#f1f5f9}
+.pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:20px}
+.price-card{background:white;padding:36px 28px;border-radius:24px;border:2px solid #e2e8f0;position:relative;transition:all 0.3s}
+.price-card:hover{transform:translateY(-4px);box-shadow:0 20px 40px rgba(15,23,42,0.1)}
+.price-card.featured{border-color:#d4af37;box-shadow:0 20px 40px rgba(212,175,55,0.15);transform:scale(1.03)}
+.price-card.featured:hover{transform:scale(1.03) translateY(-4px)}
+.price-badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#d4af37;color:#0f172a;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:900;letter-spacing:0.5px}
+.price-card h3{font-size:20px;font-weight:900;color:#0f172a;margin-bottom:8px}
+.price-card .subtitle{font-size:14px;color:#64748b;margin-bottom:24px;min-height:40px}
+.price-amount{font-size:48px;font-weight:900;color:#0f172a;line-height:1;margin-bottom:4px}
+.price-amount small{font-size:16px;font-weight:600;color:#64748b}
+.price-period{font-size:14px;color:#64748b;margin-bottom:24px}
+.price-features{list-style:none;padding:0;margin-bottom:28px}
+.price-features li{padding:10px 0;font-size:14px;color:#475569;display:flex;gap:10px;align-items:flex-start;border-bottom:1px solid #f1f5f9}
+.price-features li:last-child{border-bottom:none}
+.price-features li::before{content:"✓";color:#16a34a;font-weight:900;flex-shrink:0}
+.price-btn{width:100%;padding:14px;border-radius:12px;border:none;font-weight:800;font-size:15px;cursor:pointer;background:#0f172a;color:white;transition:all 0.2s}
+.price-btn:hover{background:#1e293b}
+.price-card.featured .price-btn{background:#16a34a}
+.price-card.featured .price-btn:hover{background:#15803d}
+
+/* ============ QR SECTION ============ */
+.qr-section{background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:white;padding:80px 24px}
+.qr-section .section-title{color:white;margin-bottom:50px}
+.qr-section .section-title h2{color:white}
+.qr-section .section-title p{color:#94a3b8}
+.qr-section .section-title .line{background:#d4af37}
+.qr-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;max-width:820px;margin:0 auto}
+.qr-box{background:white;padding:28px 24px;border-radius:24px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);position:relative}
+.qr-tag{display:inline-block;font-size:11px;font-weight:900;padding:4px 12px;border-radius:20px;margin-bottom:14px;letter-spacing:1px;text-transform:uppercase}
+.qr-tag.admin{background:rgba(212,175,55,0.15);color:#b8941f;border:1px solid rgba(212,175,55,0.4)}
+.qr-tag.mensajero{background:rgba(22,163,74,0.15);color:#15803d;border:1px solid rgba(22,163,74,0.4)}
+.qr-code{display:flex;justify-content:center;margin-bottom:16px}
+.qr-code img,.qr-code canvas{border-radius:12px;max-width:100%;height:auto}
+.qr-box h4{color:#0f172a;font-size:15px;font-weight:800;margin-bottom:6px}
+.qr-box p{color:#64748b;font-size:13px;line-height:1.5;min-height:44px}
+.qr-url{margin-top:16px;padding:8px;background:#f1f5f9;border-radius:8px;font-size:11px;color:#475569;word-break:break-all;font-family:monospace}
+.btn-solicitar{margin-top:14px;width:100%;padding:11px;border:none;background:#d4af37;color:#0f172a;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-solicitar:hover{background:#b8941f;transform:translateY(-1px)}
+.btn-solicitar-nota{font-size:11px;color:#94a3b8;margin-top:6px;text-align:center}
+.qr-note{text-align:center;color:#94a3b8;font-size:14px;margin-top:40px}
+
+/* ============ CTA FINAL ============ */
+.final-cta{background:#16a34a;color:white;padding:60px 24px;text-align:center}
+.final-cta h2{font-size:36px;font-weight:900;margin-bottom:16px;letter-spacing:-0.5px}
+.final-cta p{font-size:18px;margin-bottom:32px;opacity:0.95}
+.final-cta .btn-gold{padding:16px 36px;font-size:18px}
+
+/* ============ FOOTER ============ */
+footer{background:#0f172a;color:#94a3b8;padding:40px 24px;text-align:center;font-size:14px}
+footer a{color:#d4af37;text-decoration:none}
+footer a:hover{text-decoration:underline}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 900px){
+  .hero-inner{grid-template-columns:1fr;gap:40px}
+  .hero h1{font-size:38px}
+  .section-title h2{font-size:32px}
+  .nav-links a{display:none}
+  .price-card.featured{transform:none}
+  .price-card.featured:hover{transform:translateY(-4px)}
+  .qr-grid{grid-template-columns:1fr;gap:20px}
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== NAVBAR ==================== -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="logo"><span>Traza</span><span>GO</span></div>
+    <div class="nav-links">
+      <a href="#features">Características</a>
+      <a href="#como">Cómo funciona</a>
+      <a href="#precios">Precios</a>
+      <a href="#contacto">Contacto</a>
+      <a class="btn-nav" href="/admin.html">Iniciar sesión</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ==================== HERO ==================== -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-text">
+      <div class="hero-badge">🚀 Sistema de trazabilidad de entregas</div>
+      <h1>Entregas <span>sin excusas</span></h1>
+      <p>Controla cada entrega de tu negocio con prueba fotográfica, firma del receptor y ubicación GPS. Sin cobrar a tus mensajeros. Solo pagas por tu empresa.</p>
+      <div class="hero-cta">
+        <a href="#precios" class="btn btn-gold">💰 Ver precios</a>
+        <a href="#contacto" class="btn btn-outline">📞 Hablar con ventas</a>
+      </div>
+    </div>
+    <div class="hero-mockup">
+      <div class="mockup-bar">
+        <div class="mockup-dot red"></div>
+        <div class="mockup-dot yellow"></div>
+        <div class="mockup-dot green"></div>
+      </div>
+      <div class="mockup-content">
+        <div class="mockup-row">
+          <span>📦 Guía #001</span>
+          <span class="mockup-badge">ENTREGADO</span>
+        </div>
+        <div class="mockup-row">
+          <span>📦 Guía #002</span>
+          <span class="mockup-badge">ENTREGADO</span>
+        </div>
+        <div class="mockup-row">
+          <span>📦 Guía #003</span>
+          <span class="mockup-badge gold">PENDIENTE</span>
+        </div>
+        <div class="mockup-row">
+          <span>📦 Guía #004</span>
+          <span class="mockup-badge">ENTREGADO</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== FEATURES ==================== -->
+<section class="section" id="features">
+  <div class="section-inner">
+    <div class="section-title">
+      <h2>Todo lo que necesitas</h2>
+      <div class="line"></div>
+      <p>TrazaGO tiene hasta un 80% más de características que la competencia. Y al mejor precio del mercado.</p>
+    </div>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">📸</div>
+        <h3>Prueba fotográfica</h3>
+        <p>Cada entrega se registra con foto del paquete entregado, comprimida y optimizada automáticamente.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">✍️</div>
+        <h3>Firma del receptor</h3>
+        <p>Firma digital en pantalla del celular del mensajero. Prueba legal de quién recibió.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📍</div>
+        <h3>Ubicación GPS</h3>
+        <p>Coordenadas exactas de cada entrega. Verifica en el mapa dónde se realizó.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📴</div>
+        <h3>Modo sin internet</h3>
+        <p>Funciona aunque el mensajero no tenga datos. Sincroniza automáticamente al recuperar conexión.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📋</div>
+        <h3>Jornadas de trabajo</h3>
+        <p>Agrupa entregas por turnos. Cierra la jornada y bloquea los datos para que no se modifiquen.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">👥</div>
+        <h3>Multi-empresa</h3>
+        <p>Cada negocio ve solo sus datos. Aislamiento total garantizado a nivel de base de datos.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📊</div>
+        <h3>Exporta a Excel</h3>
+        <p>Descarga todos los datos en Excel o PDF. Compatible con cualquier sistema contable.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔍</div>
+        <h3>Búsqueda avanzada</h3>
+        <p>Encuentra cualquier entrega por guía, cliente, mensajero, estado o jornada. En cualquier fecha.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">💰</div>
+        <h3>Sin cobros a mensajeros</h3>
+        <p>Solo pagas por tu empresa. Tus mensajeros usan el sistema gratis, sin límites de uso.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== CÓMO FUNCIONA ==================== -->
+<section class="section how" id="como">
+  <div class="section-inner">
+    <div class="section-title">
+      <h2>Funciona en 4 pasos</h2>
+      <div class="line"></div>
+      <p>Desde el primer día. Sin instalaciones complicadas. Sin capacitaciones largas.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h4>Crea tu empresa</h4>
+        <p>Te damos un acceso único. Configuras tus datos en menos de 2 minutos.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h4>Invita a tus mensajeros</h4>
+        <p>Les envías un correo. Ellos entran desde el celular con el QR. Sin instalar nada.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h4>Registra entregas</h4>
+        <p>Cada entrega con foto, firma y GPS. Funciona sin internet y sincroniza solo.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <h4>Controla desde el panel</h4>
+        <p>Ve en tiempo real todas las entregas. Exporta a Excel. Cierra turnos. Todo desde el celular o PC.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== PRECIOS ==================== -->
+<section class="section pricing" id="precios">
+  <div class="section-inner">
+    <div class="section-title">
+      <h2>Precios simples, sin sorpresas</h2>
+      <div class="line"></div>
+      <p>Sin cobrar a tus mensajeros. Sin comisiones por entrega. Solo una tarifa mensual fija para tu negocio.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="price-card">
+        <h3>Emprendedor</h3>
+        <div class="subtitle">Para negocios pequeños que empiezan</div>
+        <div class="price-amount">$25<small> USD</small></div>
+        <div class="price-period">por mes</div>
+        <ul class="price-features">
+          <li>1 empresa</li>
+          <li>Hasta 5 mensajeros</li>
+          <li>500 entregas por mes</li>
+          <li>Foto, firma y GPS</li>
+          <li>Modo offline</li>
+          <li>Soporte por WhatsApp</li>
+        </ul>
+        <button class="price-btn" onclick="contactar('Emprendedor')">Comenzar</button>
+      </div>
+      <div class="price-card featured">
+        <div class="price-badge">MÁS POPULAR</div>
+        <h3>Negocio</h3>
+        <div class="subtitle">Para restaurantes y distribuidoras en crecimiento</div>
+        <div class="price-amount">$60<small> USD</small></div>
+        <div class="price-period">por mes</div>
+        <ul class="price-features">
+          <li>3 empresas</li>
+          <li>Hasta 20 mensajeros</li>
+          <li>Entregas ilimitadas</li>
+          <li>Sistema de jornadas</li>
+          <li>Exportación Excel/PDF</li>
+          <li>Búsqueda avanzada</li>
+          <li>Soporte prioritario</li>
+        </ul>
+        <button class="price-btn" onclick="contactar('Negocio')">Comenzar</button>
+      </div>
+      <div class="price-card">
+        <h3>Empresa</h3>
+        <div class="subtitle">Para operaciones grandes con múltiples sedes</div>
+        <div class="price-amount">$150<small> USD</small></div>
+        <div class="price-period">por mes</div>
+        <ul class="price-features">
+          <li>10 empresas</li>
+          <li>Mensajeros ilimitados</li>
+          <li>Entregas ilimitadas</li>
+          <li>Panel SuperAdmin</li>
+          <li>Backups automáticos</li>
+          <li>Integración con tu sistema</li>
+          <li>Soporte 24/7</li>
+          <li>Personalización</li>
+        </ul>
+        <button class="price-btn" onclick="contactar('Empresa')">Contactar ventas</button>
+      </div>
+    </div>
+    <p style="text-align:center;margin-top:40px;font-size:15px;color:#64748b">
+      💳 Pagos por transferencia, tarjeta o PSE. &nbsp;|&nbsp; 🎁 Primer mes gratis sin compromiso.
+    </p>
+  </div>
+</section>
+
+<!-- ==================== QR SECTION (2 QRs) ==================== -->
+<section class="qr-section">
+  <div class="section-inner">
+    <div class="section-title">
+      <h2>Acceso <span style="color:#d4af37">instantáneo</span> con QR</h2>
+      <div class="line"></div>
+      <p>Sin recordar URLs, sin instalar apps. Solo escanea el código y entra directo al sistema.</p>
+    </div>
+
+    <div class="qr-grid">
+      <!-- QR ADMIN -->
+      <div class="qr-box">
+        <div class="qr-tag admin">Para jefes y administradores</div>
+        <div id="qrAdmin" class="qr-code"></div>
+        <h4>Panel de control</h4>
+        <p>Gestiona empresas, mensajeros, entregas y jornadas desde tu celular o PC.</p>
+        <div class="qr-url">trazago.ab-solertia.com/admin.html</div>
+        <button class="btn-solicitar" onclick="contactar('Solicitar acceso')">
+          🔑 Solicitar acceso ahora
+        </button>
+        <div class="btn-solicitar-nota">Te creamos tu cuenta y te enviamos las credenciales</div>
+      </div>
+
+      <!-- QR MENSAJERO -->
+      <div class="qr-box">
+        <div class="qr-tag mensajero">Para mensajeros</div>
+        <div id="qrMensajero" class="qr-code"></div>
+        <h4>Registro de entregas</h4>
+        <p>Los mensajeros registran cada entrega con foto, firma y GPS desde su celular.</p>
+        <div class="qr-url">trazago.ab-solertia.com/index.html</div>
+        <button class="btn-solicitar" onclick="contactar('Info mensajeros')" style="background:#16a34a;color:white">
+          💬 Más información
+        </button>
+        <div class="btn-solicitar-nota">Sin costo para tus mensajeros</div>
+      </div>
+    </div>
+
+    <p class="qr-note">
+      💡 Imprime ambos QRs y pégalos en tu local. O envíalos por WhatsApp a tu equipo.
+    </p>
+  </div>
+</section>
+
+<!-- ==================== CTA FINAL ==================== -->
+<section class="final-cta" id="contacto">
+  <div class="section-inner">
+    <h2>¿Listo para controlar tus entregas?</h2>
+    <p>Prueba gratis 30 días. Sin tarjeta de crédito. Sin compromiso.</p>
+    <button class="btn btn-gold" onclick="contactar('Prueba gratuita')">
+      💬 Quiero mi prueba gratis
+    </button>
+  </div>
+</section>
+
+<!-- ==================== FOOTER ==================== -->
+<footer>
+  <div style="max-width:1200px;margin:0 auto">
+    <div style="font-size:22px;font-weight:900;margin-bottom:16px">
+      <span style="color:white">Traza</span><span style="color:#d4af37">GO</span>
+    </div>
+    <p style="margin-bottom:16px">Entregas sin excusas</p>
+    <p style="margin-bottom:16px">
+      <a href="#features">Características</a> &nbsp;·&nbsp;
+      <a href="#precios">Precios</a> &nbsp;·&nbsp;
+      <a href="#contacto">Contacto</a> &nbsp;·&nbsp;
+      <a href="/admin.html">Acceso clientes</a>
+    </p>
+    <p style="font-size:12px;opacity:0.7">© 2026 TrazaGO. Todos los derechos reservados.</p>
+  </div>
+</footer>
+
+<script>
+// ==================== CONFIGURACIÓN ====================
+const WHATSAPP = '573132070369';   // Tu número (formato internacional, sin +)
+
+// ==================== QR CODES ====================
+(function generarQRs(){
+  const baseUrl = window.location.origin;
+
+  function crearQR(contenedorId, url, color){
+    const contenedor = document.getElementById(contenedorId);
+    if(!contenedor) return;
+
+    if(typeof QRCode === 'undefined'){
+      contenedor.innerHTML = '<div style="width:180px;height:180px;background:#f1f5f9;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:12px">QR no disponible</div>';
+      return;
+    }
+
+    new QRCode(contenedor, {
+      text: url,
+      width: 180,
+      height: 180,
+      colorDark: color || "#0f172a",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  }
+
+  // QR del admin (jefes) — color dorado oscuro
+  crearQR('qrAdmin', baseUrl + '/admin.html', '#0f172a');
+
+  // QR del mensajero — color verde
+  crearQR('qrMensajero', baseUrl + '/index.html', '#16a34a');
+})();
+
+// ==================== CONTACTO WHATSAPP ====================
+window.contactar = (plan) => {
+  let mensaje;
+  if(plan === 'Solicitar acceso'){
+    mensaje = 'Hola, quiero solicitar acceso a TrazaGO. Me gustaría crear mi cuenta de administrador para gestionar las entregas de mi negocio. ¿Me pueden ayudar?';
+  } else if(plan === 'Info mensajeros'){
+    mensaje = 'Hola, quiero saber más sobre cómo mis mensajeros usarían TrazaGO para registrar entregas.';
+  } else {
+    mensaje = `Hola, me interesa TrazaGO. Plan: ${plan}. ¿Me pueden dar más información?`;
+  }
+  const url = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(mensaje)}`;
+  window.open(url, '_blank');
+};
+
+// ==================== SCROLL SUAVE ====================
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.querySelector(a.getAttribute('href'));
+    if(target) target.scrollIntoView({ behavior:'smooth', block:'start' });
+  });
+});
+</script>
+</body>
+</html>
