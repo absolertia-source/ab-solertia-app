@@ -11,8 +11,6 @@
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif}
 html{scroll-behavior:smooth}
 body{background:#f8fafc;color:#334155;line-height:1.6}
-
-/* ============ NAVBAR ============ */
 .nav{background:#0f172a;color:white;padding:16px 24px;position:sticky;top:0;z-index:50;box-shadow:0 2px 12px rgba(0,0,0,0.1)}
 .nav-inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
 .logo{font-size:22px;font-weight:900;letter-spacing:-0.5px}
@@ -22,8 +20,6 @@ body{background:#f8fafc;color:#334155;line-height:1.6}
 .nav-links a{color:#cbd5e1;text-decoration:none;font-size:14px;font-weight:600;transition:color 0.2s}
 .nav-links a:hover{color:#d4af37}
 .btn-nav{background:#d4af37;color:#0f172a;padding:10px 20px;border-radius:10px;border:none;font-weight:800;cursor:pointer;font-size:14px;text-decoration:none}
-
-/* ============ HERO ============ */
 .hero{background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:white;padding:80px 24px;position:relative;overflow:hidden}
 .hero::before{content:"";position:absolute;top:-100px;right:-100px;width:400px;height:400px;background:radial-gradient(circle,#d4af37 0%,transparent 70%);opacity:0.15}
 .hero-inner{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;position:relative;z-index:1}
@@ -39,7 +35,6 @@ body{background:#f8fafc;color:#334155;line-height:1.6}
 .btn-gold:hover{background:#b8941f;transform:translateY(-2px)}
 .btn-outline{background:transparent;color:white;border:2px solid rgba(255,255,255,0.2)}
 .btn-outline:hover{border-color:#d4af37;color:#d4af37}
-
 .hero-mockup{background:#1e293b;border-radius:20px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,0.5);border:1px solid #334155}
 .mockup-bar{display:flex;gap:6px;margin-bottom:16px}
 .mockup-dot{width:10px;height:10px;border-radius:50%}
@@ -51,23 +46,18 @@ body{background:#f8fafc;color:#334155;line-height:1.6}
 .mockup-row:last-child{border-bottom:none}
 .mockup-badge{background:#16a34a;color:white;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700}
 .mockup-badge.gold{background:#d4af37;color:#0f172a}
-
-/* ============ FEATURES ============ */
 .section{padding:80px 24px}
 .section-inner{max-width:1200px;margin:0 auto}
 .section-title{text-align:center;margin-bottom:60px}
 .section-title h2{font-size:40px;font-weight:900;color:#0f172a;margin-bottom:16px;letter-spacing:-1px}
 .section-title p{font-size:18px;color:#64748b;max-width:700px;margin:0 auto}
 .section-title .line{width:60px;height:4px;background:#d4af37;margin:20px auto;border-radius:2px}
-
 .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
 .feature{background:white;padding:32px;border-radius:20px;border:1px solid #e2e8f0;transition:all 0.3s}
 .feature:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(15,23,42,0.08);border-color:#d4af37}
 .feature-icon{width:56px;height:56px;background:linear-gradient(135deg,#0f172a 0%,#334155 100%);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:20px}
 .feature h3{font-size:18px;font-weight:800;color:#0f172a;margin-bottom:10px}
 .feature p{font-size:15px;color:#64748b;line-height:1.6}
-
-/* ============ CÓMO FUNCIONA ============ */
 .how{background:#0f172a;color:white}
 .how .section-title h2{color:white}
 .how .section-title p{color:#94a3b8}
@@ -76,8 +66,6 @@ body{background:#f8fafc;color:#334155;line-height:1.6}
 .step-num{width:44px;height:44px;background:#d4af37;color:#0f172a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;margin-bottom:16px}
 .step h4{font-size:17px;font-weight:800;margin-bottom:8px}
 .step p{font-size:14px;color:#94a3b8}
-
-/* ============ PRECIOS ============ */
 .pricing{background:#f1f5f9}
 .pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:20px}
 .price-card{background:white;padding:36px 28px;border-radius:24px;border:2px solid #e2e8f0;position:relative;transition:all 0.3s}
@@ -98,8 +86,6 @@ body{background:#f8fafc;color:#334155;line-height:1.6}
 .price-btn:hover{background:#1e293b}
 .price-card.featured .price-btn{background:#16a34a}
 .price-card.featured .price-btn:hover{background:#15803d}
-
-/* ============ QR SECTION ============ */
 .qr-section{background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:white;padding:80px 24px}
 .qr-section .section-title{color:white;margin-bottom:50px}
 .qr-section .section-title h2{color:white}
@@ -119,19 +105,13 @@ body{background:#f8fafc;color:#334155;line-height:1.6}
 .btn-solicitar:hover{background:#b8941f;transform:translateY(-1px)}
 .btn-solicitar-nota{font-size:11px;color:#94a3b8;margin-top:6px;text-align:center}
 .qr-note{text-align:center;color:#94a3b8;font-size:14px;margin-top:40px}
-
-/* ============ CTA FINAL ============ */
 .final-cta{background:#16a34a;color:white;padding:60px 24px;text-align:center}
 .final-cta h2{font-size:36px;font-weight:900;margin-bottom:16px;letter-spacing:-0.5px}
 .final-cta p{font-size:18px;margin-bottom:32px;opacity:0.95}
 .final-cta .btn-gold{padding:16px 36px;font-size:18px}
-
-/* ============ FOOTER ============ */
 footer{background:#0f172a;color:#94a3b8;padding:40px 24px;text-align:center;font-size:14px}
 footer a{color:#d4af37;text-decoration:none}
 footer a:hover{text-decoration:underline}
-
-/* ============ RESPONSIVE ============ */
 @media (max-width: 900px){
   .hero-inner{grid-template-columns:1fr;gap:40px}
   .hero h1{font-size:38px}
@@ -146,7 +126,6 @@ footer a:hover{text-decoration:underline}
 </head>
 <body>
 
-<!-- ==================== NAVBAR ==================== -->
 <nav class="nav">
   <div class="nav-inner">
     <div class="logo"><span>Traza</span><span>GO</span></div>
@@ -160,7 +139,6 @@ footer a:hover{text-decoration:underline}
   </div>
 </nav>
 
-<!-- ==================== HERO ==================== -->
 <section class="hero">
   <div class="hero-inner">
     <div class="hero-text">
@@ -179,28 +157,15 @@ footer a:hover{text-decoration:underline}
         <div class="mockup-dot green"></div>
       </div>
       <div class="mockup-content">
-        <div class="mockup-row">
-          <span>📦 Guía #001</span>
-          <span class="mockup-badge">ENTREGADO</span>
-        </div>
-        <div class="mockup-row">
-          <span>📦 Guía #002</span>
-          <span class="mockup-badge">ENTREGADO</span>
-        </div>
-        <div class="mockup-row">
-          <span>📦 Guía #003</span>
-          <span class="mockup-badge gold">PENDIENTE</span>
-        </div>
-        <div class="mockup-row">
-          <span>📦 Guía #004</span>
-          <span class="mockup-badge">ENTREGADO</span>
-        </div>
+        <div class="mockup-row"><span>📦 Guía #001</span><span class="mockup-badge">ENTREGADO</span></div>
+        <div class="mockup-row"><span>📦 Guía #002</span><span class="mockup-badge">ENTREGADO</span></div>
+        <div class="mockup-row"><span>📦 Guía #003</span><span class="mockup-badge gold">PENDIENTE</span></div>
+        <div class="mockup-row"><span>📦 Guía #004</span><span class="mockup-badge">ENTREGADO</span></div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ==================== FEATURES ==================== -->
 <section class="section" id="features">
   <div class="section-inner">
     <div class="section-title">
@@ -209,56 +174,19 @@ footer a:hover{text-decoration:underline}
       <p>TrazaGO tiene hasta un 80% más de características que la competencia. Y al mejor precio del mercado.</p>
     </div>
     <div class="features">
-      <div class="feature">
-        <div class="feature-icon">📸</div>
-        <h3>Prueba fotográfica</h3>
-        <p>Cada entrega se registra con foto del paquete entregado, comprimida y optimizada automáticamente.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">✍️</div>
-        <h3>Firma del receptor</h3>
-        <p>Firma digital en pantalla del celular del mensajero. Prueba legal de quién recibió.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">📍</div>
-        <h3>Ubicación GPS</h3>
-        <p>Coordenadas exactas de cada entrega. Verifica en el mapa dónde se realizó.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">📴</div>
-        <h3>Modo sin internet</h3>
-        <p>Funciona aunque el mensajero no tenga datos. Sincroniza automáticamente al recuperar conexión.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">📋</div>
-        <h3>Jornadas de trabajo</h3>
-        <p>Agrupa entregas por turnos. Cierra la jornada y bloquea los datos para que no se modifiquen.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">👥</div>
-        <h3>Multi-empresa</h3>
-        <p>Cada negocio ve solo sus datos. Aislamiento total garantizado a nivel de base de datos.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">📊</div>
-        <h3>Exporta a Excel</h3>
-        <p>Descarga todos los datos en Excel o PDF. Compatible con cualquier sistema contable.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">🔍</div>
-        <h3>Búsqueda avanzada</h3>
-        <p>Encuentra cualquier entrega por guía, cliente, mensajero, estado o jornada. En cualquier fecha.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">💰</div>
-        <h3>Sin cobros a mensajeros</h3>
-        <p>Solo pagas por tu empresa. Tus mensajeros usan el sistema gratis, sin límites de uso.</p>
-      </div>
+      <div class="feature"><div class="feature-icon">📸</div><h3>Prueba fotográfica</h3><p>Cada entrega se registra con foto del paquete entregado, comprimida y optimizada automáticamente.</p></div>
+      <div class="feature"><div class="feature-icon">✍️</div><h3>Firma del receptor</h3><p>Firma digital en pantalla del celular del mensajero. Prueba legal de quién recibió.</p></div>
+      <div class="feature"><div class="feature-icon">📍</div><h3>Ubicación GPS</h3><p>Coordenadas exactas de cada entrega. Verifica en el mapa dónde se realizó.</p></div>
+      <div class="feature"><div class="feature-icon">📴</div><h3>Modo sin internet</h3><p>Funciona aunque el mensajero no tenga datos. Sincroniza automáticamente al recuperar conexión.</p></div>
+      <div class="feature"><div class="feature-icon">📋</div><h3>Jornadas de trabajo</h3><p>Agrupa entregas por turnos. Cierra la jornada y bloquea los datos para que no se modifiquen.</p></div>
+      <div class="feature"><div class="feature-icon">👥</div><h3>Multi-empresa</h3><p>Cada negocio ve solo sus datos. Aislamiento total garantizado a nivel de base de datos.</p></div>
+      <div class="feature"><div class="feature-icon">📊</div><h3>Exporta a Excel</h3><p>Descarga todos los datos en Excel o PDF. Compatible con cualquier sistema contable.</p></div>
+      <div class="feature"><div class="feature-icon">🔍</div><h3>Búsqueda avanzada</h3><p>Encuentra cualquier entrega por guía, cliente, mensajero, estado o jornada. En cualquier fecha.</p></div>
+      <div class="feature"><div class="feature-icon">💰</div><h3>Sin cobros a mensajeros</h3><p>Solo pagas por tu empresa. Tus mensajeros usan el sistema gratis, sin límites de uso.</p></div>
     </div>
   </div>
 </section>
 
-<!-- ==================== CÓMO FUNCIONA ==================== -->
 <section class="section how" id="como">
   <div class="section-inner">
     <div class="section-title">
@@ -267,31 +195,14 @@ footer a:hover{text-decoration:underline}
       <p>Desde el primer día. Sin instalaciones complicadas. Sin capacitaciones largas.</p>
     </div>
     <div class="steps">
-      <div class="step">
-        <div class="step-num">1</div>
-        <h4>Crea tu empresa</h4>
-        <p>Te damos un acceso único. Configuras tus datos en menos de 2 minutos.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">2</div>
-        <h4>Invita a tus mensajeros</h4>
-        <p>Les envías un correo. Ellos entran desde el celular con el QR. Sin instalar nada.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">3</div>
-        <h4>Registra entregas</h4>
-        <p>Cada entrega con foto, firma y GPS. Funciona sin internet y sincroniza solo.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">4</div>
-        <h4>Controla desde el panel</h4>
-        <p>Ve en tiempo real todas las entregas. Exporta a Excel. Cierra turnos. Todo desde el celular o PC.</p>
-      </div>
+      <div class="step"><div class="step-num">1</div><h4>Crea tu empresa</h4><p>Te damos un acceso único. Configuras tus datos en menos de 2 minutos.</p></div>
+      <div class="step"><div class="step-num">2</div><h4>Invita a tus mensajeros</h4><p>Les envías un correo. Ellos entran desde el celular con el QR. Sin instalar nada.</p></div>
+      <div class="step"><div class="step-num">3</div><h4>Registra entregas</h4><p>Cada entrega con foto, firma y GPS. Funciona sin internet y sincroniza solo.</p></div>
+      <div class="step"><div class="step-num">4</div><h4>Controla desde el panel</h4><p>Ve en tiempo real todas las entregas. Exporta a Excel. Cierra turnos. Todo desde el celular o PC.</p></div>
     </div>
   </div>
 </section>
 
-<!-- ==================== PRECIOS ==================== -->
 <section class="section pricing" id="precios">
   <div class="section-inner">
     <div class="section-title">
@@ -313,9 +224,7 @@ footer a:hover{text-decoration:underline}
           <li>Modo offline</li>
           <li>Soporte por WhatsApp</li>
         </ul>
-        <a class="price-btn" href="https://checkout.wompi.co/l/wKeZuY" target="_blank" rel="noopener">
-          Comenzar ahora
-        </a>
+        <a class="price-btn" href="https://checkout.wompi.co/l/wKeZuY" target="_blank" rel="noopener">Comenzar ahora</a>
       </div>
       <div class="price-card featured">
         <div class="price-badge">MÁS POPULAR</div>
@@ -332,9 +241,7 @@ footer a:hover{text-decoration:underline}
           <li>Búsqueda avanzada</li>
           <li>Soporte prioritario</li>
         </ul>
-        <a class="price-btn" href="https://checkout.wompi.co/l/2tyjv3" target="_blank" rel="noopener">
-          Comenzar ahora
-        </a>
+        <a class="price-btn" href="https://checkout.wompi.co/l/2tyjv3" target="_blank" rel="noopener">Comenzar ahora</a>
       </div>
       <div class="price-card">
         <h3>Empresa</h3>
@@ -346,14 +253,12 @@ footer a:hover{text-decoration:underline}
           <li>Mensajeros ilimitados</li>
           <li>Entregas ilimitadas</li>
           <li>Panel SuperAdmin</li>
-          <li>Backups automáticos</li>
-          <li>Integración con tu sistema</li>
-          <li>Soporte 24/7</li>
-          <li>Personalización</li>
+          <li>Importación desde Excel</li>
+          <li>Configuración inicial guiada</li>
+          <li>Capacitación al equipo incluida</li>
+          <li>Soporte prioritario extendido</li>
         </ul>
-        <a class="price-btn" href="https://checkout.wompi.co/l/CxJ3Y5" target="_blank" rel="noopener">
-          Comenzar ahora
-        </a>
+        <a class="price-btn" href="https://checkout.wompi.co/l/CxJ3Y5" target="_blank" rel="noopener">Comenzar ahora</a>
       </div>
     </div>
     <p style="text-align:center;margin-top:40px;font-size:15px;color:#64748b">
@@ -362,7 +267,6 @@ footer a:hover{text-decoration:underline}
   </div>
 </section>
 
-<!-- ==================== QR SECTION ==================== -->
 <section class="qr-section">
   <div class="section-inner">
     <div class="section-title">
@@ -370,58 +274,41 @@ footer a:hover{text-decoration:underline}
       <div class="line"></div>
       <p>Sin recordar URLs, sin instalar apps. Solo escanea el código y entra directo al sistema.</p>
     </div>
-
     <div class="qr-grid">
-      <!-- QR ADMIN -->
       <div class="qr-box">
         <div class="qr-tag admin">Para jefes y administradores</div>
         <div id="qrAdmin" class="qr-code"></div>
         <h4>Panel de control</h4>
         <p>Gestiona empresas, mensajeros, entregas y jornadas desde tu celular o PC.</p>
         <div class="qr-url">trazago.ab-solertia.com/admin.html</div>
-        <button class="btn-solicitar" onclick="contactar('Solicitar acceso')">
-          🔑 Solicitar acceso ahora
-        </button>
+        <button class="btn-solicitar" onclick="contactar('Solicitar acceso')">🔑 Solicitar acceso ahora</button>
         <div class="btn-solicitar-nota">Te creamos tu cuenta y te enviamos las credenciales</div>
       </div>
-
-      <!-- QR MENSAJERO -->
       <div class="qr-box">
         <div class="qr-tag mensajero">Para mensajeros</div>
         <div id="qrMensajero" class="qr-code"></div>
         <h4>Registro de entregas</h4>
         <p>Los mensajeros registran cada entrega con foto, firma y GPS desde su celular.</p>
         <div class="qr-url">trazago.ab-solertia.com/index.html</div>
-        <button class="btn-solicitar" onclick="contactar('Info mensajeros')" style="background:#16a34a;color:white">
-          💬 Más información
-        </button>
+        <button class="btn-solicitar" onclick="contactar('Info mensajeros')" style="background:#16a34a;color:white">💬 Más información</button>
         <div class="btn-solicitar-nota">Sin costo para tus mensajeros</div>
       </div>
     </div>
-
-    <p class="qr-note">
-      💡 Imprime ambos QRs y pégalos en tu local. O envíalos por WhatsApp a tu equipo.
-    </p>
+    <p class="qr-note">💡 Imprime ambos QRs y pégalos en tu local. O envíalos por WhatsApp a tu equipo.</p>
   </div>
 </section>
 
-<!-- ==================== CTA FINAL ==================== -->
 <section class="final-cta" id="contacto">
   <div class="section-inner">
     <h2>¿Listo para controlar tus entregas?</h2>
     <p>Prueba gratis 30 días. Sin tarjeta de crédito. Sin compromiso.</p>
-    <button class="btn btn-gold" onclick="contactar('Prueba gratuita')">
-      💬 Quiero mi prueba gratis
-    </button>
+    <button class="btn btn-gold" onclick="contactar('Prueba gratuita')">💬 Quiero mi prueba gratis</button>
   </div>
 </section>
 
-<!-- ==================== FOOTER ==================== -->
 <footer>
   <div style="max-width:1200px;margin:0 auto">
-    <div style="font-size:22px;font-weight:900;margin-bottom:16px">
-      <span style="color:white">Traza</span><span style="color:#d4af37">GO</span>
-    </div>
+    <div style="font-size:22px;font-weight:900;margin-bottom:16px"><span style="color:white">Traza</span><span style="color:#d4af37">GO</span></div>
     <p style="margin-bottom:16px">Entregas sin excusas</p>
     <p style="margin-bottom:16px">
       <a href="#features">Características</a> &nbsp;·&nbsp;
@@ -434,40 +321,23 @@ footer a:hover{text-decoration:underline}
 </footer>
 
 <script>
-// ==================== CONFIGURACIÓN ====================
-const WHATSAPP = '573132070369';   // Tu número (formato internacional, sin +)
+const WHATSAPP = '573132070369';
 
-// ==================== QR CODES ====================
 (function generarQRs(){
   const baseUrl = window.location.origin;
-
   function crearQR(contenedorId, url, color){
     const contenedor = document.getElementById(contenedorId);
     if(!contenedor) return;
-
     if(typeof QRCode === 'undefined'){
       contenedor.innerHTML = '<div style="width:180px;height:180px;background:#f1f5f9;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:12px">QR no disponible</div>';
       return;
     }
-
-    new QRCode(contenedor, {
-      text: url,
-      width: 180,
-      height: 180,
-      colorDark: color || "#0f172a",
-      colorLight: "#ffffff",
-      correctLevel: QRCode.CorrectLevel.H
-    });
+    new QRCode(contenedor, { text: url, width: 180, height: 180, colorDark: color || "#0f172a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
   }
-
-  // QR del admin (jefes) — color azul oscuro
   crearQR('qrAdmin', baseUrl + '/admin.html', '#0f172a');
-
-  // QR del mensajero — color verde
   crearQR('qrMensajero', baseUrl + '/index.html', '#16a34a');
 })();
 
-// ==================== CONTACTO WHATSAPP ====================
 window.contactar = (tipo) => {
   let mensaje;
   if(tipo === 'Solicitar acceso'){
@@ -479,11 +349,9 @@ window.contactar = (tipo) => {
   } else {
     mensaje = `Hola, me interesa TrazaGO. ${tipo}. ¿Me pueden dar más información?`;
   }
-  const url = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(mensaje)}`;
-  window.open(url, '_blank');
+  window.open(`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(mensaje)}`, '_blank');
 };
 
-// ==================== SCROLL SUAVE ====================
 document.querySelectorAll('a[href^="#"]').forEach(a => {
   a.addEventListener('click', e => {
     e.preventDefault();
