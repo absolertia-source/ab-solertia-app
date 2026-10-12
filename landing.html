@@ -87,14 +87,14 @@ body{background:#f8fafc;color:#334155;line-height:1.6}
 .price-badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#d4af37;color:#0f172a;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:900;letter-spacing:0.5px}
 .price-card h3{font-size:20px;font-weight:900;color:#0f172a;margin-bottom:8px}
 .price-card .subtitle{font-size:14px;color:#64748b;margin-bottom:24px;min-height:40px}
-.price-amount{font-size:48px;font-weight:900;color:#0f172a;line-height:1;margin-bottom:4px}
+.price-amount{font-size:42px;font-weight:900;color:#0f172a;line-height:1;margin-bottom:4px}
 .price-amount small{font-size:16px;font-weight:600;color:#64748b}
 .price-period{font-size:14px;color:#64748b;margin-bottom:24px}
 .price-features{list-style:none;padding:0;margin-bottom:28px}
 .price-features li{padding:10px 0;font-size:14px;color:#475569;display:flex;gap:10px;align-items:flex-start;border-bottom:1px solid #f1f5f9}
 .price-features li:last-child{border-bottom:none}
 .price-features li::before{content:"✓";color:#16a34a;font-weight:900;flex-shrink:0}
-.price-btn{width:100%;padding:14px;border-radius:12px;border:none;font-weight:800;font-size:15px;cursor:pointer;background:#0f172a;color:white;transition:all 0.2s}
+.price-btn{width:100%;padding:14px;border-radius:12px;border:none;font-weight:800;font-size:15px;cursor:pointer;background:#0f172a;color:white;transition:all 0.2s;text-decoration:none;display:block;text-align:center}
 .price-btn:hover{background:#1e293b}
 .price-card.featured .price-btn{background:#16a34a}
 .price-card.featured .price-btn:hover{background:#15803d}
@@ -140,6 +140,7 @@ footer a:hover{text-decoration:underline}
   .price-card.featured{transform:none}
   .price-card.featured:hover{transform:translateY(-4px)}
   .qr-grid{grid-template-columns:1fr;gap:20px}
+  .price-amount{font-size:38px}
 }
 </style>
 </head>
@@ -302,8 +303,8 @@ footer a:hover{text-decoration:underline}
       <div class="price-card">
         <h3>Emprendedor</h3>
         <div class="subtitle">Para negocios pequeños que empiezan</div>
-        <div class="price-amount">$25<small> USD</small></div>
-        <div class="price-period">por mes</div>
+        <div class="price-amount">$149.000<small> COP</small></div>
+        <div class="price-period">por mes · IVA incluido</div>
         <ul class="price-features">
           <li>1 empresa</li>
           <li>Hasta 5 mensajeros</li>
@@ -312,14 +313,16 @@ footer a:hover{text-decoration:underline}
           <li>Modo offline</li>
           <li>Soporte por WhatsApp</li>
         </ul>
-        <button class="price-btn" onclick="contactar('Emprendedor')">Comenzar</button>
+        <a class="price-btn" href="https://checkout.wompi.co/l/wKeZuY" target="_blank" rel="noopener">
+          Comenzar ahora
+        </a>
       </div>
       <div class="price-card featured">
         <div class="price-badge">MÁS POPULAR</div>
         <h3>Negocio</h3>
         <div class="subtitle">Para restaurantes y distribuidoras en crecimiento</div>
-        <div class="price-amount">$60<small> USD</small></div>
-        <div class="price-period">por mes</div>
+        <div class="price-amount">$299.000<small> COP</small></div>
+        <div class="price-period">por mes · IVA incluido</div>
         <ul class="price-features">
           <li>3 empresas</li>
           <li>Hasta 20 mensajeros</li>
@@ -329,13 +332,15 @@ footer a:hover{text-decoration:underline}
           <li>Búsqueda avanzada</li>
           <li>Soporte prioritario</li>
         </ul>
-        <button class="price-btn" onclick="contactar('Negocio')">Comenzar</button>
+        <a class="price-btn" href="https://checkout.wompi.co/l/2tyjv3" target="_blank" rel="noopener">
+          Comenzar ahora
+        </a>
       </div>
       <div class="price-card">
         <h3>Empresa</h3>
         <div class="subtitle">Para operaciones grandes con múltiples sedes</div>
-        <div class="price-amount">$150<small> USD</small></div>
-        <div class="price-period">por mes</div>
+        <div class="price-amount">$599.000<small> COP</small></div>
+        <div class="price-period">por mes · IVA incluido</div>
         <ul class="price-features">
           <li>10 empresas</li>
           <li>Mensajeros ilimitados</li>
@@ -346,16 +351,18 @@ footer a:hover{text-decoration:underline}
           <li>Soporte 24/7</li>
           <li>Personalización</li>
         </ul>
-        <button class="price-btn" onclick="contactar('Empresa')">Contactar ventas</button>
+        <a class="price-btn" href="https://checkout.wompi.co/l/CxJ3Y5" target="_blank" rel="noopener">
+          Comenzar ahora
+        </a>
       </div>
     </div>
     <p style="text-align:center;margin-top:40px;font-size:15px;color:#64748b">
-      💳 Pagos por transferencia, tarjeta o PSE. &nbsp;|&nbsp; 🎁 Primer mes gratis sin compromiso.
+      💳 Pagos seguros con tarjeta, PSE o Nequi a través de Wompi. &nbsp;|&nbsp; 🎁 Primer mes gratis sin compromiso.
     </p>
   </div>
 </section>
 
-<!-- ==================== QR SECTION (2 QRs) ==================== -->
+<!-- ==================== QR SECTION ==================== -->
 <section class="qr-section">
   <div class="section-inner">
     <div class="section-title">
@@ -453,7 +460,7 @@ const WHATSAPP = '573132070369';   // Tu número (formato internacional, sin +)
     });
   }
 
-  // QR del admin (jefes) — color dorado oscuro
+  // QR del admin (jefes) — color azul oscuro
   crearQR('qrAdmin', baseUrl + '/admin.html', '#0f172a');
 
   // QR del mensajero — color verde
@@ -461,14 +468,16 @@ const WHATSAPP = '573132070369';   // Tu número (formato internacional, sin +)
 })();
 
 // ==================== CONTACTO WHATSAPP ====================
-window.contactar = (plan) => {
+window.contactar = (tipo) => {
   let mensaje;
-  if(plan === 'Solicitar acceso'){
+  if(tipo === 'Solicitar acceso'){
     mensaje = 'Hola, quiero solicitar acceso a TrazaGO. Me gustaría crear mi cuenta de administrador para gestionar las entregas de mi negocio. ¿Me pueden ayudar?';
-  } else if(plan === 'Info mensajeros'){
+  } else if(tipo === 'Info mensajeros'){
     mensaje = 'Hola, quiero saber más sobre cómo mis mensajeros usarían TrazaGO para registrar entregas.';
+  } else if(tipo === 'Prueba gratuita'){
+    mensaje = 'Hola, quiero probar TrazaGO gratis 30 días. ¿Me pueden dar más información?';
   } else {
-    mensaje = `Hola, me interesa TrazaGO. Plan: ${plan}. ¿Me pueden dar más información?`;
+    mensaje = `Hola, me interesa TrazaGO. ${tipo}. ¿Me pueden dar más información?`;
   }
   const url = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(mensaje)}`;
   window.open(url, '_blank');
