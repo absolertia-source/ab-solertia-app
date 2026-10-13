@@ -42,11 +42,23 @@ body{background:#f1f5f9;padding:12px}
 .badge-abierta{display:inline-block;background:#16a34a;color:white;font-size:11px;padding:3px 9px;border-radius:20px;font-weight:bold;margin-left:6px}
 .badge-cerrada{display:inline-block;background:#94a3b8;color:white;font-size:11px;padding:3px 9px;border-radius:20px;font-weight:bold;margin-left:6px}
 .aviso-cerrada{background:#f1f5f9;color:#475569;padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:10px;border-left:4px solid #64748b;line-height:1.4}
+.seguridad-aviso{font-size:11px;color:#94a3b8;text-align:center;margin-top:14px;line-height:1.5}
+.seguridad-aviso b{color:#475569}
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.7);padding:12px;z-index:100;align-items:center;justify-content:center}
+.modal-card{background:white;max-width:400px;width:100%;padding:24px;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+.modal-card h3{color:#0f172a;margin-bottom:8px;font-size:18px}
+.modal-card p{font-size:13px;color:#64748b;margin-bottom:16px;line-height:1.5}
+.modal-card label{font-size:12px;color:#64748b;font-weight:bold;display:block;margin-top:10px}
+.modal-card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin-top:4px;font-size:14px}
+.modal-buttons{display:flex;gap:8px;margin-top:20px}
+.modal-buttons button{flex:1;padding:12px;border-radius:10px;border:none;font-weight:bold;cursor:pointer;font-size:14px}
+.modal-error{color:#dc2626;font-size:12px;margin-top:10px;text-align:center}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, getDocs, getDocsFromServer, query, where, orderBy, limit, doc, getDoc, setDoc, updateDoc, deleteDoc, Timestamp, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, setPersistence, inMemoryPersistence, updatePassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
 const app = initializeApp(firebaseConfig);
@@ -102,7 +114,6 @@ function timestampAMillis(ts){
   if(ts.toDate) return ts.toDate().getTime();
   return new Date(ts).getTime();
 }
-// 🕒 Hora real de Firestore (serverTimestamp, no la del celular)
 function formatearHoraReal(d){
   if(d.creado){
     try {
@@ -157,12 +168,97 @@ window.entrarAdmin = async () => {
     iniciarAutoRefresh();
     actualizarUIVista();
     await cargarLista();
+
+    // 🔒 Si debe cambiar contraseña, mostrar modal obligatorio
+    if(userData.debe_cambiar_password === true){
+      setTimeout(() => {
+        abrirModalCambiarPassword(true);
+      }, 500);
+    }
   } catch(e) {
     if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
         err.innerText = '❌ ERROR: Correo o contraseña incorrectos';
     } else {
         err.innerText = '❌ ERROR TÉCNICO: ' + e.message;
     }
+  }
+}
+
+// ==================== MODAL CAMBIO DE CONTRASEÑA ====================
+window.abrirModalCambiarPassword = (obligatorio) => {
+  document.getElementById('modalPasswordTitulo').innerText = obligatorio
+    ? '🔒 Cambia tu contraseña'
+    : '🔑 Cambiar contraseña';
+
+  document.getElementById('modalPasswordDesc').innerText = obligatorio
+    ? 'Por seguridad, debes cambiar la contraseña temporal que te asignaron antes de continuar.'
+    : 'Ingresa tu nueva contraseña. Debe tener al menos 8 caracteres.';
+
+  document.getElementById('inputNuevaPass').value = '';
+  document.getElementById('inputConfirmarPass').value = '';
+  document.getElementById('modalPasswordError').innerText = '';
+  document.getElementById('btnCerrarModalPass').style.display = obligatorio ? 'none' : 'block';
+  document.getElementById('modalCambiarPassword').dataset.obligatorio = obligatorio ? '1' : '0';
+  document.getElementById('modalCambiarPassword').style.display = 'flex';
+}
+
+window.cerrarModalPassword = () => {
+  const modal = document.getElementById('modalCambiarPassword');
+  if(modal.dataset.obligatorio === '1'){
+    alert('⚠️ Debes cambiar la contraseña antes de continuar.');
+    return;
+  }
+  modal.style.display = 'none';
+}
+
+window.confirmarCambioPassword = async () => {
+  const nueva = document.getElementById('inputNuevaPass').value;
+  const confirmar = document.getElementById('inputConfirmarPass').value;
+  const errorEl = document.getElementById('modalPasswordError');
+  const btn = document.getElementById('btnConfirmarCambioPass');
+
+  errorEl.innerText = '';
+
+  if(nueva.length < 8){
+    errorEl.innerText = 'La contraseña debe tener al menos 8 caracteres';
+    return;
+  }
+  if(nueva !== confirmar){
+    errorEl.innerText = 'Las contraseñas no coinciden';
+    return;
+  }
+  if(!auth.currentUser){
+    errorEl.innerText = 'Sesión expirada. Vuelve a entrar.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerText = 'Guardando...';
+
+  try {
+    // 1. Actualizar contraseña en Firebase Auth
+    await updatePassword(auth.currentUser, nueva);
+
+    // 2. Marcar en Firestore que ya no debe cambiarla
+    await updateDoc(doc(db, "usuarios", auth.currentUser.uid), {
+      debe_cambiar_password: false,
+      password_cambiada: serverTimestamp()
+    });
+
+    alert('✅ Contraseña actualizada correctamente.');
+    document.getElementById('modalCambiarPassword').style.display = 'none';
+  } catch(e) {
+    console.error(e);
+    if(e.code === 'auth/requires-recent-login'){
+      errorEl.innerText = 'Por seguridad, cierra sesión y vuelve a entrar antes de cambiar la contraseña.';
+    } else if(e.code === 'auth/weak-password'){
+      errorEl.innerText = 'La contraseña es muy débil. Usa una más segura.';
+    } else {
+      errorEl.innerText = 'Error: ' + (e.message || e.code);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.innerText = 'Cambiar contraseña';
   }
 }
 
@@ -173,17 +269,9 @@ async function cargarJornadas(){
   try {
     let snap;
     try {
-      snap = await getDocsFromServer(query(
-        collection(db, "jornadas"),
-        where("empresa_id","==",miEmpresaId),
-        limit(50)
-      ));
+      snap = await getDocsFromServer(query(collection(db, "jornadas"), where("empresa_id","==",miEmpresaId), limit(50)));
     } catch(e1){
-      snap = await getDocs(query(
-        collection(db, "jornadas"),
-        where("empresa_id","==",miEmpresaId),
-        limit(50)
-      ));
+      snap = await getDocs(query(collection(db, "jornadas"), where("empresa_id","==",miEmpresaId), limit(50)));
     }
     snap.forEach(d => {
       const j = { id: d.id, ...d.data() };
@@ -202,30 +290,18 @@ async function cargarJornadaActual(){
   try {
     let snap;
     try {
-      snap = await getDocsFromServer(query(
-        collection(db, "jornadas"),
-        where("empresa_id","==",miEmpresaId),
-        limit(50)
-      ));
+      snap = await getDocsFromServer(query(collection(db, "jornadas"), where("empresa_id","==",miEmpresaId), limit(50)));
     } catch(e1){
-      snap = await getDocs(query(
-        collection(db, "jornadas"),
-        where("empresa_id","==",miEmpresaId),
-        limit(50)
-      ));
+      snap = await getDocs(query(collection(db, "jornadas"), where("empresa_id","==",miEmpresaId), limit(50)));
     }
     snap.forEach(d => {
       const data = d.data();
-      if(data.estado === 'abierta'){
-        jornadaActual = { id: d.id, ...data };
-      }
+      if(data.estado === 'abierta') jornadaActual = { id: d.id, ...data };
     });
   } catch(e){
     console.error('❌ Error cargando jornada actual:', e);
-    jornadaActual = null;
   }
   renderizarJornadaActual();
-
   if(modoVista === 'jornada' && !jornadaSeleccionada && jornadaActual){
     jornadaSeleccionada = jornadaActual.id;
     const sel = document.getElementById('jornadaSelector');
@@ -273,10 +349,7 @@ function renderizarSelectJornadas(){
 }
 
 window.abrirModalNuevaJornada = () => {
-  if(jornadaActual){
-    alert('⚠️ Ya hay una jornada abierta.\n\nCiérrala primero antes de abrir otra.');
-    return;
-  }
+  if(jornadaActual){ alert('⚠️ Ya hay una jornada abierta.\n\nCiérrala primero.'); return; }
   const nombreDefecto = 'Jornada del ' + new Date().toLocaleDateString('es-CO', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
   document.getElementById('nuevaJornadaNombre').value = nombreDefecto;
   document.getElementById('nuevaJornadaNotas').value = '';
@@ -295,15 +368,10 @@ window.confirmarNuevaJornada = async () => {
   const idNueva = 'j_' + Date.now();
   try {
     await setDoc(doc(db, "jornadas", idNueva), {
-      empresa_id: miEmpresaId,
-      nombre: nombre,
-      notas: notas,
-      inicio: serverTimestamp(),
-      fin: null,
-      estado: 'abierta',
-      creada_por: miEmail,
-      cerrada_por: null,
-      total_entregas: 0
+      empresa_id: miEmpresaId, nombre, notas,
+      inicio: serverTimestamp(), fin: null,
+      estado: 'abierta', creada_por: miEmail,
+      cerrada_por: null, total_entregas: 0
     });
     cerrarModalNuevaJornada();
     await cargarJornadas();
@@ -317,39 +385,26 @@ window.confirmarNuevaJornada = async () => {
 }
 
 window.cerrarJornada = async (id) => {
-  if(!confirm('🔒 ¿Cerrar la jornada actual?\n\n⚠️ Una vez cerrada, sus entregas quedan BLOQUEADAS (no se podrán borrar ni editar).\n\nPodrás reabrirla después si necesitas hacer cambios.')) return;
+  if(!confirm('🔒 ¿Cerrar la jornada actual?\n\n⚠️ Sus entregas quedarán BLOQUEADAS contra borrado.')) return;
 
   try {
     let rawSnap;
     try {
-      rawSnap = await getDocsFromServer(query(
-        collection(db,"visitas"),
-        where("empresa_id","==",miEmpresaId),
-        limit(1000)
-      ));
+      rawSnap = await getDocsFromServer(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), limit(1000)));
     } catch(e){
-      rawSnap = await getDocs(query(
-        collection(db,"visitas"),
-        where("empresa_id","==",miEmpresaId),
-        limit(1000)
-      ));
+      rawSnap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), limit(1000)));
     }
-
     let total = 0;
-    rawSnap.forEach(d => {
-      if(d.data().jornada_id === id) total++;
-    });
+    rawSnap.forEach(d => { if(d.data().jornada_id === id) total++; });
 
     await updateDoc(doc(db, "jornadas", id), {
-      estado: 'cerrada',
-      fin: serverTimestamp(),
-      cerrada_por: miEmail,
-      total_entregas: total
+      estado: 'cerrada', fin: serverTimestamp(),
+      cerrada_por: miEmail, total_entregas: total
     });
 
     await cargarJornadas();
     await cargarJornadaActual();
-    alert('🔒 Jornada cerrada.\n\nEntregas en esta jornada: ' + total + '\n\nSus datos quedan bloqueados contra borrado.');
+    alert('🔒 Jornada cerrada.\n\nEntregas: ' + total);
     await cargarLista();
   } catch(e){
     console.error(e);
@@ -358,26 +413,17 @@ window.cerrarJornada = async (id) => {
 }
 
 window.reabrirJornada = async (id) => {
-  if(jornadaActual){
-    alert('⚠️ Ya hay otra jornada abierta. Ciérrala primero.');
-    return;
-  }
-  if(!confirm('🔓 ¿Reabrir esta jornada?\n\nVolverá a estar activa y sus entregas podrán editarse/borrarse de nuevo.')) return;
-  if(!confirm('🛑 CONFIRMACIÓN FINAL\n\n¿Estás completamente seguro de reabrir?')) return;
+  if(jornadaActual){ alert('⚠️ Ya hay otra jornada abierta.'); return; }
+  if(!confirm('🔓 ¿Reabrir esta jornada?')) return;
+  if(!confirm('🛑 CONFIRMACIÓN FINAL\n\n¿Estás seguro?')) return;
 
   try {
-    await updateDoc(doc(db, "jornadas", id), {
-      estado: 'abierta',
-      fin: null,
-      cerrada_por: null
-    });
+    await updateDoc(doc(db, "jornadas", id), { estado: 'abierta', fin: null, cerrada_por: null });
     await cargarJornadas();
     await cargarJornadaActual();
     alert('🔓 Jornada reabierta.');
     await cargarLista();
-  } catch(e){
-    alert('Error: ' + e.message);
-  }
+  } catch(e){ alert('Error: ' + e.message); }
 }
 
 window.reabrirJornadaSeleccionada = () => {
@@ -402,10 +448,7 @@ window.cambiarModoVista = () => {
   cargarLista();
 }
 
-window.cambiarJornadaSeleccionada = (val) => {
-  jornadaSeleccionada = val;
-  cargarLista();
-}
+window.cambiarJornadaSeleccionada = (val) => { jornadaSeleccionada = val; cargarLista(); }
 
 window.cambiarFecha = (val) => {
   if(val){
@@ -465,11 +508,8 @@ window.recargarTodo = async () => {
     await cargarHistorial(true);
     await cargarLista();
     actualizarUltimaSync();
-  } catch(e){
-    alert('Error: ' + e.message);
-  } finally {
-    setTimeout(() => btn && btn.classList.remove('pulse'), 600);
-  }
+  } catch(e){ alert('Error: ' + e.message); }
+  finally { setTimeout(() => btn && btn.classList.remove('pulse'), 600); }
 }
 
 function actualizarUltimaSync(){
@@ -482,7 +522,7 @@ window.invitarVendedor = async () => {
   const email = document.getElementById('vendEmail').value.trim();
   const pass = document.getElementById('vendPass').value.trim();
   if(!email || !pass){ alert('Datos incompletos'); return; }
-  if(pass.length < 6){ alert('La contraseña debe tener al menos 6 caracteres'); return; }
+  if(pass.length < 8){ alert('La contraseña debe tener al menos 8 caracteres'); return; }
   try {
     const cred = await createUserWithEmailAndPassword(secondaryAuth, email, pass);
     await setDoc(doc(db, "usuarios", cred.user.uid), {
@@ -490,36 +530,27 @@ window.invitarVendedor = async () => {
       empresa_id: miEmpresaId,
       empresa_nombre: document.getElementById('nombreEmpresaTop').innerText || '',
       rol: "vendedor",
+      debe_cambiar_password: true,   // 🔒 Forzar cambio al primer login
       creado: Timestamp.now()
     });
     await signOut(secondaryAuth);
-    alert('✅ Mensajero creado');
+    alert('✅ Mensajero creado\n\nDeberá cambiar su contraseña al entrar por primera vez.');
     document.getElementById('vendEmail').value = '';
     document.getElementById('vendPass').value = '';
     cargarVendedores();
   } catch(e) {
     if(e.code === 'auth/email-already-in-use'){
-      alert('⚠️ Ese correo ya está registrado en Authentication.');
-    } else {
-      alert('Error: ' + e.code);
-    }
+      alert('⚠️ Ese correo ya está registrado.');
+    } else { alert('Error: ' + e.code); }
   }
 }
 
 async function cargarVendedores(){
   let snap;
   try {
-    snap = await getDocsFromServer(query(
-      collection(db,"usuarios"),
-      where("empresa_id","==",miEmpresaId),
-      where("rol","==","vendedor")
-    ));
+    snap = await getDocsFromServer(query(collection(db,"usuarios"), where("empresa_id","==",miEmpresaId), where("rol","==","vendedor")));
   } catch(e){
-    snap = await getDocs(query(
-      collection(db,"usuarios"),
-      where("empresa_id","==",miEmpresaId),
-      where("rol","==","vendedor")
-    ));
+    snap = await getDocs(query(collection(db,"usuarios"), where("empresa_id","==",miEmpresaId), where("rol","==","vendedor")));
   }
   let html = '';
   snap.forEach(d => {
@@ -552,9 +583,7 @@ function tarjetaVisita(d, docId){
   const foto  = d.foto  || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="70"><rect width="70" height="70" fill="%23e2e8f0"/></svg>';
   const firma = d.firma || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="40"><rect width="70" height="40" fill="%23f1f5f9"/></svg>';
   const guiaSegura = (d.guia || '').replace(/'/g, '').replace(/"/g, '');
-
   const horaReal = formatearHoraReal(d);
-
   const estadoJornada = d.jornada_id ? jornadaEstados[d.jornada_id] : null;
   const cerrada = estadoJornada === 'cerrada';
 
@@ -563,7 +592,7 @@ function tarjetaVisita(d, docId){
     : `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:20px;font-size:10px;margin-left:4px">⚠️ Sin jornada</span>`;
 
   const botonBorrar = cerrada
-    ? `<button disabled title="La jornada está cerrada. Reábrela para poder borrar." style="font-size:11px; padding:4px 8px; background:#cbd5e1; color:#475569; border:none; border-radius:6px; cursor:not-allowed">🔒 Cerrada</button>`
+    ? `<button disabled title="La jornada está cerrada." style="font-size:11px; padding:4px 8px; background:#cbd5e1; color:#475569; border:none; border-radius:6px; cursor:not-allowed">🔒 Cerrada</button>`
     : `<button onclick="eliminarEntrega('${docId}', '${guiaSegura}')" style="font-size:11px; padding:4px 8px; cursor:pointer; background:#dc2626; color:white; border:none; border-radius:6px">🗑️ Borrar</button>`;
 
   return `<div class="visita ${cerrada?'bloqueada':''}">
@@ -592,17 +621,9 @@ async function cargarLista(){
     if(modoVista === 'jornada' && jornadaSeleccionada){
       let rawSnap;
       try {
-        rawSnap = await getDocsFromServer(query(
-          collection(db,"visitas"),
-          where("empresa_id","==",miEmpresaId),
-          limit(1000)
-        ));
+        rawSnap = await getDocsFromServer(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), limit(1000)));
       } catch(e1){
-        rawSnap = await getDocs(query(
-          collection(db,"visitas"),
-          where("empresa_id","==",miEmpresaId),
-          limit(1000)
-        ));
+        rawSnap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), limit(1000)));
       }
       const arr = [];
       rawSnap.forEach(d => {
@@ -617,34 +638,16 @@ async function cargarLista(){
       const inicio = new Date(fechaSeleccionada); inicio.setHours(0,0,0,0);
       const fin = new Date(fechaSeleccionada);    fin.setHours(23,59,59,999);
       try {
-        snap = await getDocsFromServer(query(
-          collection(db,"visitas"),
-          where("empresa_id","==",miEmpresaId),
-          where("creado",">=",Timestamp.fromDate(inicio)),
-          where("creado","<=",Timestamp.fromDate(fin))
-        ));
+        snap = await getDocsFromServer(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), where("creado",">=",Timestamp.fromDate(inicio)), where("creado","<=",Timestamp.fromDate(fin))));
       } catch(e){
-        snap = await getDocs(query(
-          collection(db,"visitas"),
-          where("empresa_id","==",miEmpresaId),
-          where("creado",">=",Timestamp.fromDate(inicio)),
-          where("creado","<=",Timestamp.fromDate(fin))
-        ));
+        snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), where("creado",">=",Timestamp.fromDate(inicio)), where("creado","<=",Timestamp.fromDate(fin))));
       }
     } else if(modoVista === 'sinjornada'){
       let rawSnap;
       try {
-        rawSnap = await getDocsFromServer(query(
-          collection(db,"visitas"),
-          where("empresa_id","==",miEmpresaId),
-          limit(1000)
-        ));
+        rawSnap = await getDocsFromServer(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), limit(1000)));
       } catch(e){
-        rawSnap = await getDocs(query(
-          collection(db,"visitas"),
-          where("empresa_id","==",miEmpresaId),
-          limit(1000)
-        ));
+        rawSnap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), limit(1000)));
       }
       const arr = [];
       rawSnap.forEach(d => {
@@ -653,7 +656,6 @@ async function cargarLista(){
       });
       arr.sort((a,b) => timestampAMillis(b.data.creado) - timestampAMillis(a.data.creado));
       snap = { forEach: cb => arr.forEach(x => cb({ id: x.id, data: () => x.data })) , size: arr.length };
-
     } else {
       document.getElementById('lista').innerHTML = '<p style="text-align:center;color:#64748b;padding:20px">Selecciona una jornada o una fecha</p>';
       document.getElementById('ranking').innerHTML = 'No hay datos';
@@ -707,18 +709,12 @@ async function cargarLista(){
 
   let avisoCerrada = '';
   if(esVistaCerrada){
-    avisoCerrada = `<div class="aviso-cerrada">
-      🔒 <b>Jornada cerrada.</b> Las entregas de esta jornada están bloqueadas contra borrado. Para editarlas, primero reabre la jornada.
-    </div>`;
+    avisoCerrada = `<div class="aviso-cerrada">🔒 <b>Jornada cerrada.</b> Las entregas están bloqueadas contra borrado.</div>`;
   }
 
   document.getElementById('lista').innerHTML = avisoCerrada + (htmlVisitas || vacio);
-
   const contReabrir = document.getElementById('accionesJornadaCerrada');
-  if(contReabrir){
-    contReabrir.style.display = esVistaCerrada ? 'block' : 'none';
-  }
-
+  if(contReabrir) contReabrir.style.display = esVistaCerrada ? 'block' : 'none';
   actualizarUltimaSync();
 }
 
@@ -727,30 +723,14 @@ window.filtrarEntregas = async () => {
   const texto = (document.getElementById('searchGuia').value || '').toLowerCase().trim();
   const buscarGlobal = document.getElementById('buscarGlobal')?.checked;
 
-  if(!texto){
-    await cargarLista();
-    return;
-  }
+  if(!texto){ await cargarLista(); return; }
 
   if(buscarGlobal){
-    document.getElementById('lista').innerHTML =
-      '<p style="text-align:center;color:#64748b;padding:20px">🔎 Buscando en todo el historial...</p>';
-
+    document.getElementById('lista').innerHTML = '<p style="text-align:center;color:#64748b;padding:20px">🔎 Buscando en todo el historial...</p>';
     try {
       let rawSnap;
-      try {
-        rawSnap = await getDocsFromServer(query(
-          collection(db,"visitas"),
-          where("empresa_id","==",miEmpresaId),
-          limit(500)
-        ));
-      } catch(e){
-        rawSnap = await getDocs(query(
-          collection(db,"visitas"),
-          where("empresa_id","==",miEmpresaId),
-          limit(500)
-        ));
-      }
+      try { rawSnap = await getDocsFromServer(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), limit(500))); }
+      catch(e){ rawSnap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), limit(500))); }
 
       const todos = [];
       rawSnap.forEach(docSnap => {
@@ -773,20 +753,14 @@ window.filtrarEntregas = async () => {
       if(contReabrir) contReabrir.style.display = 'none';
 
       if(filtrados.length === 0){
-        document.getElementById('lista').innerHTML =
-          `<p style="text-align:center;color:#64748b;padding:20px">🔍 Sin resultados para "${texto}" en ninguna fecha</p>`;
+        document.getElementById('lista').innerHTML = `<p style="text-align:center;color:#64748b;padding:20px">🔍 Sin resultados</p>`;
         return;
       }
 
-      const encabezado = `<p style="background:#eff6ff;color:#1e40af;padding:10px;border-radius:10px;font-size:13px;margin:0 4px 10px">
-        📚 <b>${filtrados.length}</b> resultado(s) encontrado(s) en el historial
-      </p>`;
-
-      document.getElementById('lista').innerHTML = encabezado +
-        filtrados.map(({id, data}) => tarjetaVisita(data, id)).join('');
+      const encabezado = `<p style="background:#eff6ff;color:#1e40af;padding:10px;border-radius:10px;font-size:13px;margin:0 4px 10px">📚 <b>${filtrados.length}</b> resultado(s)</p>`;
+      document.getElementById('lista').innerHTML = encabezado + filtrados.map(({id, data}) => tarjetaVisita(data, id)).join('');
     } catch(e) {
-      document.getElementById('lista').innerHTML =
-        `<p style="text-align:center;color:#dc2626;padding:20px">❌ Error: ${e.message}</p>`;
+      document.getElementById('lista').innerHTML = `<p style="color:#dc2626;padding:20px">❌ Error: ${e.message}</p>`;
     }
     return;
   }
@@ -801,8 +775,7 @@ window.filtrarEntregas = async () => {
   });
 
   if(filtrados.length === 0){
-    document.getElementById('lista').innerHTML =
-      `<p style="text-align:center;color:#64748b;padding:20px">🔍 Sin resultados para "${texto}".<br><small style="color:#94a3b8">Prueba activar ☑️ "Buscar en todo el historial"</small></p>`;
+    document.getElementById('lista').innerHTML = `<p style="text-align:center;color:#64748b;padding:20px">🔍 Sin resultados.<br><small style="color:#94a3b8">Prueba activar ☑️ "Buscar en todo el historial"</small></p>`;
     return;
   }
 
@@ -816,11 +789,10 @@ window.filtrarEntregas = async () => {
 window.eliminarEntrega = async (docId, guia) => {
   const d = entregasPorId[docId];
   if(d && d.jornada_id && jornadaEstados[d.jornada_id] === 'cerrada'){
-    alert('🔒 No se puede borrar.\n\nEsta entrega pertenece a una jornada CERRADA.\n\nPara borrarla, reabre primero la jornada desde el dropdown.');
+    alert('🔒 No se puede borrar.\n\nEsta entrega pertenece a una jornada CERRADA.');
     return;
   }
-
-  if(!confirm(`⚠️ ¿Borrar la entrega "${guia || docId}"?\n\nEsta acción NO se puede deshacer.`)) return;
+  if(!confirm(`⚠️ ¿Borrar "${guia || docId}"?\n\nEsta acción NO se puede deshacer.`)) return;
 
   try {
     await deleteDoc(doc(db, "visitas", docId));
@@ -828,10 +800,8 @@ window.eliminarEntrega = async (docId, guia) => {
     await cargarHistorial(true);
   } catch(e) {
     if(e.code === 'permission-denied' || (e.message && e.message.includes('permission'))){
-      alert('🔒 No se puede borrar.\n\nEsta entrega pertenece a una jornada cerrada.');
-    } else {
-      alert('Error: ' + e.message);
-    }
+      alert('🔒 No se puede borrar.');
+    } else { alert('Error: ' + e.message); }
   }
 }
 
@@ -840,7 +810,7 @@ window.descargarPDF = async (docId) => {
   const { jsPDF } = window.jspdf;
   const docPdf = new jsPDF();
   const d = entregasPorId[docId];
-  if(!d){ alert('No se encontró la entrega'); return; }
+  if(!d){ alert('No encontrada'); return; }
 
   docPdf.setFontSize(20); docPdf.text("Certificado de Entrega - TrazaGO", 20, 20);
   docPdf.setFontSize(12);
@@ -863,7 +833,7 @@ window.descargarPDF = async (docId) => {
 
 // ==================== EXCEL ====================
 window.descargarExcel = () => {
-  if(datosGlobal.length === 0){ alert('No hay datos para exportar'); return; }
+  if(datosGlobal.length === 0){ alert('No hay datos'); return; }
   const datosExcel = datosGlobal.map(d => ({
     Jornada: d.jornada_nombre || 'Sin jornada',
     Mensajero: d.vendedor || '',
@@ -872,7 +842,6 @@ window.descargarExcel = () => {
     Receptor: d.cliente || '',
     Firmado: d.firma ? 'Sí' : 'No',
     'Fecha real': formatearHoraReal(d),
-    'Hora del dispositivo': d.hora || '',
     Mapa: `https://www.google.com/maps?q=${d.lat || ''},${d.lng || ''}`
   }));
   const ws = XLSX.utils.json_to_sheet(datosExcel);
@@ -887,19 +856,9 @@ async function cargarHistorial(reset){
   if(reset) document.getElementById('historial').innerHTML = 'Cargando...';
   let snap;
   try {
-    snap = await getDocsFromServer(query(
-      collection(db,"visitas"),
-      where("empresa_id","==",miEmpresaId),
-      orderBy("creado","desc"),
-      limit(50)
-    ));
+    snap = await getDocsFromServer(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), limit(50)));
   } catch(e){
-    snap = await getDocs(query(
-      collection(db,"visitas"),
-      where("empresa_id","==",miEmpresaId),
-      orderBy("creado","desc"),
-      limit(50)
-    ));
+    snap = await getDocs(query(collection(db,"visitas"), where("empresa_id","==",miEmpresaId), orderBy("creado","desc"), limit(50)));
   }
   let html = '';
   snap.forEach((docSnap) => {
@@ -918,6 +877,10 @@ async function cargarHistorial(reset){
   <input id="adminPass" type="password" placeholder="Contraseña">
   <button onclick="entrarAdmin()">Entrar al Panel</button>
   <p id="adminErr" style="color:red; text-align:center"></p>
+  <p class="seguridad-aviso">
+    🔒 Verifica que la URL sea <b>trazago.ab-solertia.com</b><br>
+    Nadie te pedirá tu contraseña por teléfono, correo o WhatsApp.
+  </p>
 </div>
 
 <div id="panel" style="display:none">
@@ -927,6 +890,7 @@ async function cargarHistorial(reset){
       <div id="lastUpdate">—</div>
     </div>
     <div style="display:flex;gap:8px">
+      <button class="btn btn-white" onclick="abrirModalCambiarPassword(false)">🔑 Contraseña</button>
       <button class="btn btn-green" onclick="descargarExcel()">📊 Excel</button>
       <button id="btnActualizar" class="btn btn-white" onclick="recargarTodo()">↻ Actualizar</button>
     </div>
@@ -962,7 +926,7 @@ async function cargarHistorial(reset){
     </div>
 
     <div id="grupoSinJornada" style="display:none;margin-top:8px">
-      <p style="font-size:13px;color:#64748b">Mostrando entregas que se registraron sin jornada abierta (o antes de este sistema).</p>
+      <p style="font-size:13px;color:#64748b">Mostrando entregas sin jornada.</p>
     </div>
   </div>
 
@@ -971,14 +935,15 @@ async function cargarHistorial(reset){
     <input id="searchGuia" class="search-box" placeholder="Guía, cliente, mensajero, estado o jornada..." oninput="filtrarEntregas()">
     <label class="check-global">
       <input type="checkbox" id="buscarGlobal" onchange="filtrarEntregas()">
-      <span>🔎 <b>Buscar en todo el historial</b> (no solo la vista actual, máx. 500)</span>
+      <span>🔎 <b>Buscar en todo el historial</b> (máx. 500)</span>
     </label>
   </div>
 
   <div class="card">
     <h4>➕ Invitar Mensajero</h4>
     <input id="vendEmail" placeholder="Correo">
-    <input id="vendPass" type="password" placeholder="Clave (mín. 6 caracteres)">
+    <input id="vendPass" type="password" placeholder="Contraseña temporal (mín. 8 caracteres)">
+    <p style="font-size:11px;color:#64748b;margin-top:4px">🔒 El mensajero deberá cambiarla al entrar por primera vez</p>
     <button onclick="invitarVendedor()">Crear acceso</button>
     <div id="listaVendedores" style="margin-top:10px"></div>
   </div>
@@ -988,34 +953,47 @@ async function cargarHistorial(reset){
 
   <div style="display:flex;gap:8px;margin:18px 4px 8px">
     <button id="tabHoy" class="btn btn-white" style="flex:1" onclick="cambiarTab('hoy')">📋 Vista actual</button>
-    <button id="tabHistorial" class="btn btn-white" style="flex:1" onclick="cambiarTab('historial')">📚 Historial (últimas 50)</button>
+    <button id="tabHistorial" class="btn btn-white" style="flex:1" onclick="cambiarTab('historial')">📚 Historial (50)</button>
   </div>
 
   <div id="lista"></div>
   <div id="historial" style="display:none"></div>
 
-  <!-- 🔓 Botón reabrir (solo visible en jornadas cerradas) -->
   <div id="accionesJornadaCerrada" style="display:none;margin:14px 0">
     <button class="btn btn-blue" onclick="reabrirJornadaSeleccionada()" style="width:100%;padding:14px;font-size:15px">
       🔓 Reabrir esta jornada para editar
     </button>
-    <p style="text-align:center;font-size:12px;color:#94a3b8;margin-top:6px">
-      Al reabrir, podrás borrar y editar sus entregas
-    </p>
   </div>
 </div>
 
 <!-- MODAL Nueva Jornada -->
-<div id="modalNuevaJornada" style="display:none;position:fixed;inset:0;background:#0008;padding:12px;z-index:100;align-items:center;justify-content:center">
-  <div class="card" style="max-width:400px;width:100%;margin:0">
+<div id="modalNuevaJornada" class="modal-overlay">
+  <div class="modal-card" style="max-width:400px">
     <h3>📋 Abrir nueva jornada</h3>
-    <label style="font-size:12px;color:#64748b;font-weight:bold;display:block;margin-top:10px">Nombre:</label>
+    <label>Nombre:</label>
     <input id="nuevaJornadaNombre" placeholder="Ej: Turno mañana 10 oct">
-    <label style="font-size:12px;color:#64748b;font-weight:bold;display:block;margin-top:10px">Notas (opcional):</label>
+    <label>Notas (opcional):</label>
     <input id="nuevaJornadaNotas" placeholder="Ej: Ruta norte">
-    <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn btn-white" onclick="cerrarModalNuevaJornada()" style="flex:1">Cancelar</button>
-      <button class="btn btn-green" onclick="confirmarNuevaJornada()" style="flex:2">✅ Abrir jornada</button>
+    <div class="modal-buttons">
+      <button onclick="cerrarModalNuevaJornada()" style="background:#e2e8f0;color:#0f172a">Cancelar</button>
+      <button onclick="confirmarNuevaJornada()" style="background:#16a34a;color:white">✅ Abrir jornada</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL Cambiar Contraseña -->
+<div id="modalCambiarPassword" class="modal-overlay">
+  <div class="modal-card">
+    <h3 id="modalPasswordTitulo">🔑 Cambiar contraseña</h3>
+    <p id="modalPasswordDesc">Ingresa tu nueva contraseña. Debe tener al menos 8 caracteres.</p>
+    <label>Nueva contraseña:</label>
+    <input type="password" id="inputNuevaPass" placeholder="Mínimo 8 caracteres">
+    <label>Confirmar contraseña:</label>
+    <input type="password" id="inputConfirmarPass" placeholder="Repite la contraseña">
+    <p class="modal-error" id="modalPasswordError"></p>
+    <div class="modal-buttons">
+      <button id="btnCerrarModalPass" onclick="cerrarModalPassword()" style="background:#e2e8f0;color:#0f172a">Cancelar</button>
+      <button id="btnConfirmarCambioPass" onclick="confirmarCambioPassword()" style="background:#0f172a;color:white">Cambiar contraseña</button>
     </div>
   </div>
 </div>
