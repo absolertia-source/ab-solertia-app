@@ -22,9 +22,8 @@ body{background:#f1f5f9;padding:12px}
 .btn-group{display:flex;gap:5px;flex-wrap:wrap}
 .sep{border:none;border-top:1px solid #e2e8f0;margin:12px 0}
 .hint{font-size:13px;color:#64748b;margin:6px 0}
-#lastUpdate{font-size:11px;color:#94a3b8;margin-top:4px}
-.pulse{animation:pulse 0.6s ease-in-out}
-@keyframes pulse{0%{opacity:0.5}50%{opacity:1}100%{opacity:0.5}}
+.seguridad-aviso{font-size:11px;color:#94a3b8;text-align:center;margin-top:14px;line-height:1.5}
+.seguridad-aviso b{color:#475569}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -82,7 +81,7 @@ function iniciarAutoRefresh(){
     if(document.visibilityState === 'visible' && auth.currentUser){
       cargarGlobal();
     }
-  }, 60000);   // cada 60 segundos
+  }, 60000);
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -91,13 +90,12 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// ==================== CARGA GLOBAL (contadores eficientes) ====================
+// ==================== CARGA GLOBAL ====================
 async function cargarGlobal(){
   const btn = document.getElementById('btnActualizar');
   if(btn) btn.classList.add('pulse');
 
   try {
-    // 🚀 CONTADORES EFICIENTES: solo 3 lecturas al servidor (una por colección)
     const [countEmp, countVis, countUsu] = await Promise.all([
       getCountFromServer(collection(db, "empresas")),
       getCountFromServer(collection(db, "visitas")),
@@ -108,7 +106,6 @@ async function cargarGlobal(){
     document.getElementById('totalVis').innerText = countVis.data().count;
     document.getElementById('totalUsu').innerText = countUsu.data().count;
 
-    // La lista de empresas sí necesita los documentos (para mostrar nombre y estado)
     let empSnap;
     try {
       empSnap = await getDocsFromServer(collection(db, "empresas"));
@@ -172,8 +169,8 @@ window.crearEmpresa = async () => {
   if(!nombre || !idEmp || !aEmail || !aPass){
     alert('Completa todos los campos'); return;
   }
-  if(aPass.length < 6){
-    alert('La contraseña debe tener al menos 6 caracteres'); return;
+  if(aPass.length < 8){
+    alert('La contraseña debe tener al menos 8 caracteres (por seguridad)'); return;
   }
   if(!/^[a-z0-9\-]+$/.test(idEmp)){
     alert('El ID solo puede tener letras minúsculas, números y guiones. Ej: distribuidora-norte');
@@ -204,12 +201,13 @@ window.crearEmpresa = async () => {
       rol: "admin",
       empresa_id: idEmp,
       empresa_nombre: nombre,
+      debe_cambiar_password: true,   // 🔒 Fuerza cambio de contraseña al primer login
       creado: Timestamp.now()
     });
 
     await signOut(secondaryAuth);
 
-    alert(`✅ Todo OK\n\nEmpresa: ${nombre}\nAdmin: ${aEmail}\n\nEl admin ya puede entrar en admin.html`);
+    alert(`✅ Todo OK\n\nEmpresa: ${nombre}\nAdmin: ${aEmail}\n\nEl admin deberá cambiar la contraseña al entrar por primera vez.`);
     document.getElementById('empNombre').value  = '';
     document.getElementById('empId').value      = '';
     document.getElementById('adminEmail').value = '';
@@ -262,6 +260,10 @@ window.salir = () => {
   <input id="pass" type="password" placeholder="Contraseña">
   <button onclick="entrarSuper()">Entrar al Sistema</button>
   <p id="err" style="color:red; text-align:center"></p>
+  <p class="seguridad-aviso">
+    🔒 Verifica que la URL sea <b>trazago.ab-solertia.com</b><br>
+    Nadie te pedirá tu contraseña por teléfono, correo o WhatsApp.
+  </p>
 </div>
 
 <div id="panel" style="display:none">
@@ -291,7 +293,8 @@ window.salir = () => {
     <hr class="sep">
     <p class="hint" style="font-weight:bold;color:#0f172a">👤 Admin inicial de esta empresa:</p>
     <input id="adminEmail" placeholder="Correo del admin">
-    <input id="adminPass" type="password" placeholder="Contraseña (mín. 6 caracteres)">
+    <input id="adminPass" type="password" placeholder="Contraseña temporal (mín. 8 caracteres)">
+    <p class="hint">🔒 El admin tendrá que cambiarla al entrar por primera vez</p>
     <button onclick="crearEmpresa()">Registrar Empresa + Admin</button>
   </div>
 
