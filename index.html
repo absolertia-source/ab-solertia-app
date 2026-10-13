@@ -3,11 +3,11 @@
 <meta name="description" content="Sistema de registro y georreferenciación de entregas de pedidos.">
 <meta name="theme-color" content="#0f172a">
 <link rel="manifest" href="/manifest.json">
-<style>*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#f1f5f9;padding:12px}.login{max-width:360px;margin:40px auto;background:white;padding:24px;border-radius:20px}.card{background:white;padding:14px;border-radius:16px;margin:10px 0}input,button,select{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}button{background:#0f172a;color:white;font-weight:bold;border:none}button:disabled{opacity:0.6;cursor:not-allowed}.top{display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:white;padding:12px;border-radius:12px}#gpsStat{font-size:12px;padding:10px;background:#fef3c7;border-radius:8px;margin:8px 0}#offlineAlert{display:none;background:#dc2626;color:white;padding:10px;border-radius:12px;text-align:center;font-size:13px;margin-bottom:10px;font-weight:bold}#jornadaBar{display:none;background:#dcfce7;color:#166534;padding:10px;border-radius:12px;text-align:center;font-size:13px;margin-bottom:10px;font-weight:bold;border:1px solid #86efac}#jornadaBar.sinJornada{background:#fef3c7;color:#92400e;border-color:#fcd34d}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}body{background:#f1f5f9;padding:12px}.login{max-width:360px;margin:40px auto;background:white;padding:24px;border-radius:20px}.card{background:white;padding:14px;border-radius:16px;margin:10px 0}input,button,select{width:100%;padding:14px;border-radius:12px;border:1px solid #e2e8f0;margin:6px 0}button{background:#0f172a;color:white;font-weight:bold;border:none}button:disabled{opacity:0.6;cursor:not-allowed}.top{display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:white;padding:12px;border-radius:12px}#gpsStat{font-size:12px;padding:10px;background:#fef3c7;border-radius:8px;margin:8px 0}#offlineAlert{display:none;background:#dc2626;color:white;padding:10px;border-radius:12px;text-align:center;font-size:13px;margin-bottom:10px;font-weight:bold}#jornadaBar{display:none;background:#dcfce7;color:#166534;padding:10px;border-radius:12px;text-align:center;font-size:13px;margin-bottom:10px;font-weight:bold;border:1px solid #86efac}#jornadaBar.sinJornada{background:#fef3c7;color:#92400e;border-color:#fcd34d}.seguridad-aviso{font-size:11px;color:#94a3b8;text-align:center;margin-top:14px;line-height:1.5}.seguridad-aviso b{color:#475569}.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.7);padding:12px;z-index:100;align-items:center;justify-content:center}.modal-card{background:white;max-width:400px;width:100%;padding:24px;border-radius:16px}.modal-card h3{color:#0f172a;margin-bottom:8px;font-size:18px}.modal-card p{font-size:13px;color:#64748b;margin-bottom:16px;line-height:1.5}.modal-card label{font-size:12px;color:#64748b;font-weight:bold;display:block;margin-top:10px}.modal-card input{width:100%;padding:12px;border-radius:10px;border:1px solid #e2e8f0;margin-top:4px;font-size:14px}.modal-buttons{display:flex;gap:8px;margin-top:20px}.modal-buttons button{flex:1;padding:12px;border-radius:10px;border:none;font-weight:bold;cursor:pointer;font-size:14px}.modal-error{color:#dc2626;font-size:12px;margin-top:10px;text-align:center}</style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, getDocsFromServer, query, where, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, getDocsFromServer, query, where, limit, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAztR8cTNbDYZlHWWHN5J1ewI5DlrTregI", authDomain: "ab-solertia.firebaseapp.com", projectId: "ab-solertia", storageBucket: "ab-solertia.firebasestorage.app", messagingSenderId: "951500964119", appId: "1:951500964119:web:208c481e237612ff4af752" };
 const app = initializeApp(firebaseConfig);
@@ -19,13 +19,12 @@ let gpsValido=true;
 let miEmpresaId=null;
 let firmaBase='', dibujando=false, firmaCtx=null;
 let entregaIdActual = null;
-let jornadaActual = null;   // { id, nombre } o null
+let jornadaActual = null;
 
 function generarIdEntrega(){
   return 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
 }
 
-// --- API expuesta a window ---
 window.guardarFirebase = async (d, id) => {
   const { _id, ...dataLimpia } = d;
   return await setDoc(doc(db, "visitas", id), { ...dataLimpia, creado: serverTimestamp() });
@@ -38,25 +37,65 @@ window.registrarError = async (contexto, mensaje) => {
   try{ await addDoc(collection(db,"errores"), { app:'index', contexto, mensaje, usuario: localStorage.getItem('ab_vend')||'', empresa_id: localStorage.getItem('ab_empresa')||'', fecha: serverTimestamp() }); }catch(e){}
 }
 
-// --- Leer jornada abierta de la empresa ---
+// ==================== CAMBIO DE CONTRASEÑA ====================
+window.abrirModalCambiarPassword = (obligatorio) => {
+  document.getElementById('modalPasswordTitulo').innerText = obligatorio ? '🔒 Cambia tu contraseña' : '🔑 Cambiar contraseña';
+  document.getElementById('modalPasswordDesc').innerText = obligatorio
+    ? 'Por seguridad, debes cambiar la contraseña temporal que te asignaron.'
+    : 'Ingresa tu nueva contraseña. Debe tener al menos 8 caracteres.';
+  document.getElementById('inputNuevaPass').value = '';
+  document.getElementById('inputConfirmarPass').value = '';
+  document.getElementById('modalPasswordError').innerText = '';
+  document.getElementById('btnCerrarModalPass').style.display = obligatorio ? 'none' : 'block';
+  document.getElementById('modalCambiarPassword').dataset.obligatorio = obligatorio ? '1' : '0';
+  document.getElementById('modalCambiarPassword').style.display = 'flex';
+}
+
+window.cerrarModalPassword = () => {
+  const modal = document.getElementById('modalCambiarPassword');
+  if(modal.dataset.obligatorio === '1'){ alert('⚠️ Debes cambiar la contraseña para continuar.'); return; }
+  modal.style.display = 'none';
+}
+
+window.confirmarCambioPassword = async () => {
+  const nueva = document.getElementById('inputNuevaPass').value;
+  const confirmar = document.getElementById('inputConfirmarPass').value;
+  const errorEl = document.getElementById('modalPasswordError');
+  const btn = document.getElementById('btnConfirmarCambioPass');
+  errorEl.innerText = '';
+
+  if(nueva.length < 8){ errorEl.innerText = 'Mínimo 8 caracteres'; return; }
+  if(nueva !== confirmar){ errorEl.innerText = 'Las contraseñas no coinciden'; return; }
+  if(!auth.currentUser){ errorEl.innerText = 'Sesión expirada'; return; }
+
+  btn.disabled = true; btn.innerText = 'Guardando...';
+
+  try {
+    await updatePassword(auth.currentUser, nueva);
+    await updateDoc(doc(db, "usuarios", auth.currentUser.uid), {
+      debe_cambiar_password: false,
+      password_cambiada: serverTimestamp()
+    });
+    alert('✅ Contraseña actualizada.');
+    document.getElementById('modalCambiarPassword').style.display = 'none';
+  } catch(e) {
+    console.error(e);
+    if(e.code === 'auth/requires-recent-login'){
+      errorEl.innerText = 'Por seguridad, cierra sesión y vuelve a entrar.';
+    } else {
+      errorEl.innerText = 'Error: ' + (e.message || e.code);
+    }
+  } finally {
+    btn.disabled = false; btn.innerText = 'Cambiar contraseña';
+  }
+}
+
+// ==================== JORNADA ====================
 async function cargarJornadaAbierta(){
   try {
     let snap;
-    try {
-      snap = await getDocsFromServer(query(
-        collection(db, "jornadas"),
-        where("empresa_id", "==", miEmpresaId),
-        where("estado", "==", "abierta"),
-        limit(1)
-      ));
-    } catch(e){
-      snap = await getDocs(query(
-        collection(db, "jornadas"),
-        where("empresa_id", "==", miEmpresaId),
-        where("estado", "==", "abierta"),
-        limit(1)
-      ));
-    }
+    try { snap = await getDocsFromServer(query(collection(db, "jornadas"), where("empresa_id", "==", miEmpresaId), where("estado", "==", "abierta"), limit(1))); }
+    catch(e){ snap = await getDocs(query(collection(db, "jornadas"), where("empresa_id", "==", miEmpresaId), where("estado", "==", "abierta"), limit(1))); }
 
     if(!snap.empty){
       const doc0 = snap.docs[0];
@@ -69,11 +108,9 @@ async function cargarJornadaAbierta(){
       localStorage.removeItem('ab_jornada_nombre');
     }
   } catch(e){
-    console.warn('No se pudo leer jornada, uso la cacheada', e);
     const id = localStorage.getItem('ab_jornada_id');
     const nombre = localStorage.getItem('ab_jornada_nombre');
-    if(id && nombre) jornadaActual = { id, nombre };
-    else jornadaActual = null;
+    jornadaActual = (id && nombre) ? { id, nombre } : null;
   }
   mostrarBarraJornada();
 }
@@ -110,28 +147,22 @@ async function sincronizarPendientes(){
   if(pendientes.length === 0) return;
   if(!auth.currentUser) return;
 
-  console.log('Sincronizando ' + pendientes.length + ' entregas...');
   const restantes = [];
   for(let i=0; i<pendientes.length; i++){
     const p = pendientes[i];
     const idFinal = p._id || generarIdEntrega();
-    try{
-      await window.guardarFirebase(p, idFinal);
-    } catch(e){
-      console.error('Error subiendo pendiente', e);
-      restantes.push(p);
-    }
+    try{ await window.guardarFirebase(p, idFinal); }
+    catch(e){ restantes.push(p); }
   }
   if(restantes.length === 0){
     localStorage.removeItem('pendientes_traza');
-    alert('✅ Se han sincronizado ' + pendientes.length + ' entregas pendientes.');
+    alert('✅ Sincronizadas ' + pendientes.length + ' entregas pendientes.');
   } else {
     localStorage.setItem('pendientes_traza', JSON.stringify(restantes));
-    alert('⚠️ Se subieron ' + (pendientes.length - restantes.length) + ' y quedan ' + restantes.length + ' pendientes.');
+    alert('⚠️ Quedan ' + restantes.length + ' pendientes.');
   }
 }
 
-// --- Autenticación reactiva ---
 onAuthStateChanged(auth, async (user) => {
   if(!user){
     localStorage.removeItem('ab_vend');
@@ -143,16 +174,20 @@ onAuthStateChanged(auth, async (user) => {
   try {
     const snap = await window.getUsuarioDoc(user.uid);
     if(!snap.exists() || !snap.data().empresa_id){
-      alert('Tu cuenta no está vinculada a ninguna empresa. Contacta al administrador.');
+      alert('Tu cuenta no está vinculada.');
       await window.logoutFirebase();
       return;
     }
-    localStorage.setItem('ab_vend', snap.data().email || user.email);
-    localStorage.setItem('ab_empresa', snap.data().empresa_id);
-    miEmpresaId = snap.data().empresa_id;
+    const data = snap.data();
+    localStorage.setItem('ab_vend', data.email || user.email);
+    localStorage.setItem('ab_empresa', data.empresa_id);
+    miEmpresaId = data.empresa_id;
     mostrarApp();
+
+    if(data.debe_cambiar_password === true){
+      setTimeout(() => abrirModalCambiarPassword(true), 600);
+    }
   } catch(e){
-    console.error('Error verificando perfil', e);
     document.getElementById('login').style.display='block';
     document.getElementById('app').style.display='none';
   }
@@ -163,24 +198,18 @@ window.entrar = async () => {
   const p=document.getElementById('pass').value.trim();
   const err=document.getElementById('err');
   err.innerText='';
-  try{
-    await window.loginFirebase(email, p);
-  } catch(e){
-    if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'){
-      err.innerText='Correo o contraseña incorrectos';
-    } else if(e.code === 'auth/invalid-email'){
-      err.innerText='Correo inválido';
-    } else if(e.code === 'auth/too-many-requests'){
-      err.innerText='Demasiados intentos. Espera unos minutos.';
-    } else {
-      err.innerText='Error: '+e.code;
-    }
+  try{ await window.loginFirebase(email, p); }
+  catch(e){
+    if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'){ err.innerText='Correo o contraseña incorrectos'; }
+    else if(e.code === 'auth/invalid-email'){ err.innerText='Correo inválido'; }
+    else if(e.code === 'auth/too-many-requests'){ err.innerText='Demasiados intentos.'; }
+    else { err.innerText='Error: '+e.code; }
   }
 }
 
 window.olvide = async () => {
   const email = document.getElementById('emp').value.trim();
-  if(!email){ alert('Escribe tu correo arriba primero'); return; }
+  if(!email){ alert('Escribe tu correo primero'); return; }
   try{ await window.recuperarClave(email); alert('Correo enviado a ' + email); }
   catch(e){ alert('Error: '+e.code); }
 }
@@ -197,16 +226,13 @@ window.salir = () => {
 
 window.nueva = () => {
   entregaIdActual = generarIdEntrega();
-  console.log('Nueva entrega ID: ' + entregaIdActual + ' | Jornada: ' + (jornadaActual?.id || 'SIN JORNADA'));
-
   document.getElementById('guia').value = '';
   document.getElementById('cli').value = '';
   document.getElementById('estado').value = 'Entregado';
   document.getElementById('prevFoto').style.display = 'none';
   document.getElementById('infoFoto').innerText = '';
   document.getElementById('fotoFile').value = '';
-  fotoBase = '';
-  firmaBase = '';
+  fotoBase = ''; firmaBase = '';
 
   document.getElementById('formVis').style.display='block';
   document.getElementById('gpsStat').innerText='📡 Buscando GPS...';
@@ -215,18 +241,12 @@ window.nueva = () => {
   window.limpiarFirma();
   if(navigator.geolocation){
     navigator.geolocation.getCurrentPosition(
-      pos=>{
-        lat=pos.coords.latitude;
-        lng=pos.coords.longitude;
-        gpsValido=true;
+      pos=>{ lat=pos.coords.latitude; lng=pos.coords.longitude; gpsValido=true;
         document.getElementById('gpsStat').innerText='✅ GPS OK ('+lat.toFixed(4)+', '+lng.toFixed(4)+')';
-        document.getElementById('gpsStat').style.background='#dcfce7';
-      },
-      err=>{
-        gpsValido=false;
-        document.getElementById('gpsStat').innerText='❌ Sin GPS - Se guardará sin ubicación precisa';
-        document.getElementById('gpsStat').style.background='#fecaca';
-      },
+        document.getElementById('gpsStat').style.background='#dcfce7'; },
+      err=>{ gpsValido=false;
+        document.getElementById('gpsStat').innerText='❌ Sin GPS';
+        document.getElementById('gpsStat').style.background='#fecaca'; },
       { enableHighAccuracy:true, timeout:8000 }
     );
   }
@@ -235,40 +255,26 @@ window.nueva = () => {
 window.guardar = async () => {
   const btn = document.getElementById('btnGuardar');
   if(btn && btn.disabled) return;
-
-  if(!auth.currentUser){
-    alert('Tu sesión expiró. Vuelve a entrar.');
-    location.reload();
-    return;
-  }
-
-  if(!entregaIdActual){
-    entregaIdActual = generarIdEntrega();
-  }
+  if(!auth.currentUser){ alert('Tu sesión expiró.'); location.reload(); return; }
+  if(!entregaIdActual) entregaIdActual = generarIdEntrega();
 
   const guia = document.getElementById('guia').value.trim();
   const cli  = document.getElementById('cli').value.trim();
   const estado = document.getElementById('estado').value;
-  if(!guia || !cli || !fotoBase || !firmaBase){
-    alert('Completa todos los campos y la firma'); return;
-  }
+  if(!guia || !cli || !fotoBase || !firmaBase){ alert('Completa todos los campos y la firma'); return; }
 
-  // 🔄 Re-verificar jornada (por si abrieron/cerraron mientras el vendedor tenía el form abierto)
   await cargarJornadaAbierta();
 
-  if(btn){
-    btn.disabled = true;
-    btn.innerText = 'Guardando...';
-  }
+  if(btn){ btn.disabled = true; btn.innerText = 'Guardando...'; }
 
   const dato = {
     empresa_id: localStorage.getItem('ab_empresa'),
     vendedor: localStorage.getItem('ab_vend'),
-    guia: guia, cliente: cli, estado: estado,
+    guia, cliente: cli, estado,
     foto: fotoBase, firma: firmaBase,
-    lat: lat, lng: lng, gpsValido: gpsValido,
+    lat, lng, gpsValido,
     hora: new Date().toLocaleString(),
-    jornada_id: jornadaActual ? jornadaActual.id : null,   // 👈 campo nuevo
+    jornada_id: jornadaActual ? jornadaActual.id : null,
     jornada_nombre: jornadaActual ? jornadaActual.nombre : null
   };
 
@@ -277,20 +283,16 @@ window.guardar = async () => {
       const pendientes = JSON.parse(localStorage.getItem('pendientes_traza') || '[]');
       pendientes.push({ ...dato, _id: entregaIdActual });
       localStorage.setItem('pendientes_traza', JSON.stringify(pendientes));
-      alert('📡 Sin internet. Entrega guardada localmente y se subirá al conectar.');
+      alert('📡 Sin internet. Se subirá al conectar.');
     } else {
       try{
         await window.guardarFirebase(dato, entregaIdActual);
-        if(jornadaActual){
-          alert('¡Entrega Registrada!\n\n📋 Jornada: ' + jornadaActual.nombre);
-        } else {
-          alert('¡Entrega Registrada!\n\n⚠️ Quedó SIN jornada asignada.');
-        }
+        alert(jornadaActual ? '¡Entrega Registrada!\n\n📋 ' + jornadaActual.nombre : '¡Entrega Registrada!\n\n⚠️ Sin jornada');
       } catch(e){
         const pendientes = JSON.parse(localStorage.getItem('pendientes_traza') || '[]');
         pendientes.push({ ...dato, _id: entregaIdActual });
         localStorage.setItem('pendientes_traza', JSON.stringify(pendientes));
-        alert('⚠️ Error al subir ('+e.message+'). Se guardó localmente.');
+        alert('⚠️ Error al subir. Se guardó localmente.');
       }
     }
 
@@ -304,10 +306,7 @@ window.guardar = async () => {
     window.limpiarFirma();
     entregaIdActual = null;
   } finally {
-    if(btn){
-      btn.disabled = false;
-      btn.innerText = 'Guardar Entrega';
-    }
+    if(btn){ btn.disabled = false; btn.innerText = 'Guardar Entrega'; }
   }
 }
 
@@ -357,9 +356,8 @@ document.getElementById('fotoFile').addEventListener('change', e => {
 
 window.addEventListener('online',  () => { chequearConexion(); sincronizarPendientes(); cargarJornadaAbierta(); });
 window.addEventListener('offline', chequearConexion);
-
 </script></head><body>
-<div id="offlineAlert">⚠️ Modo Offline: Los datos se guardarán localmente y se subirán al recuperar conexión.</div>
+<div id="offlineAlert">⚠️ Modo Offline: Los datos se guardan local y se suben al conectar.</div>
 <div id="jornadaBar"></div>
 <div id="login" class="login">
   <h2>TrazaGO</h2>
@@ -371,11 +369,18 @@ window.addEventListener('offline', chequearConexion);
   <p style="text-align:center;font-size:13px;margin-top:8px">
     <a href="#" onclick="olvide();return false;" style="color:#0f172a">¿Olvidaste tu contraseña?</a>
   </p>
+  <p class="seguridad-aviso">
+    🔒 Verifica que la URL sea <b>trazago.ab-solertia.com</b><br>
+    Nadie te pedirá tu contraseña por teléfono, correo o WhatsApp.
+  </p>
 </div>
 <div id="app" style="display:none">
   <div class="top">
     <b id="info"></b>
-    <button onclick="salir()" style="width:auto;padding:6px 12px">Salir</button>
+    <div style="display:flex;gap:8px">
+      <button onclick="abrirModalCambiarPassword(false)" style="width:auto;padding:6px 12px;background:white;color:#0f172a;font-size:12px">🔑</button>
+      <button onclick="salir()" style="width:auto;padding:6px 12px">Salir</button>
+    </div>
   </div>
   <button onclick="nueva()" style="margin-top:12px">+ Registrar Entrega</button>
   <div id="lista"></div>
@@ -386,7 +391,7 @@ window.addEventListener('offline', chequearConexion);
     <div id="gpsStat">📡 Esperando GPS...</div>
     <input id="guia" placeholder="Número de Pedido / Guía">
     <input id="cli" placeholder="Nombre del Receptor / Dirección">
-    <p style="font-size:12px;margin-top:8px">📦 Estado de la Entrega:</p>
+    <p style="font-size:12px;margin-top:8px">📦 Estado:</p>
     <select id="estado">
       <option value="Entregado">✅ Entregado</option>
       <option value="Rechazado">❌ Rechazado</option>
@@ -396,11 +401,28 @@ window.addEventListener('offline', chequearConexion);
     <input id="fotoFile" type="file" accept="image/*" capture="environment">
     <div id="infoFoto" style="font-size:11px;color:green"></div>
     <img id="prevFoto" style="width:100%;display:none;border-radius:10px;margin-top:8px">
-    <p style="font-size:12px;margin-top:10px">✍️ Firma de quien recibe:</p>
+    <p style="font-size:12px;margin-top:10px">✍️ Firma:</p>
     <canvas id="firmaCanvas" width="460" height="180" style="border:1px solid #e2e8f0;border-radius:10px;touch-action:none;background:#fff;display:block;width:100%;max-width:100%;margin-top:4px"></canvas>
     <button type="button" onclick="limpiarFirma()" style="background:#e2e8f0;color:#0f172a;margin-top:6px">Borrar firma</button>
     <button id="btnGuardar" onclick="guardar()">Guardar Entrega</button>
     <button onclick="document.getElementById('formVis').style.display='none'" style="background:#e2e8f0;color:#0f172a">Cancelar</button>
+  </div>
+</div>
+
+<!-- MODAL Cambiar Contraseña -->
+<div id="modalCambiarPassword" class="modal-overlay">
+  <div class="modal-card">
+    <h3 id="modalPasswordTitulo">🔑 Cambiar contraseña</h3>
+    <p id="modalPasswordDesc">Ingresa tu nueva contraseña. Debe tener al menos 8 caracteres.</p>
+    <label>Nueva contraseña:</label>
+    <input type="password" id="inputNuevaPass" placeholder="Mínimo 8 caracteres">
+    <label>Confirmar contraseña:</label>
+    <input type="password" id="inputConfirmarPass" placeholder="Repite la contraseña">
+    <p class="modal-error" id="modalPasswordError"></p>
+    <div class="modal-buttons">
+      <button id="btnCerrarModalPass" onclick="cerrarModalPassword()" style="background:#e2e8f0;color:#0f172a">Cancelar</button>
+      <button id="btnConfirmarCambioPass" onclick="confirmarCambioPassword()" style="background:#0f172a;color:white">Cambiar contraseña</button>
+    </div>
   </div>
 </div>
 </body></html>
